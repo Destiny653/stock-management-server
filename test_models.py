@@ -2,13 +2,13 @@
 import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
 from beanie import init_beanie
-from app.models.organization import Organization
-from app.models.location import Location
-from app.models.product import Product
-from app.models.supplier import Supplier
-from app.models.vendor import Vendor
-from app.models.warehouse import Warehouse
-from app.core.config import settings
+from models.organization import Organization
+from models.location import Location
+from models.product import Product
+from models.supplier import Supplier
+from models.vendor import Vendor
+from models.warehouse import Warehouse
+from core.config import settings
 
 async def test():
     print("Testing MongoDB connection and Beanie initialization...")

@@ -1,9 +1,9 @@
 
 import asyncio
-from app.db.mongodb import init_db
-from app.models.user import User
-from app.schemas.user import UserCreate
-from app.core import security
+from db.mongodb import init_db
+from models.user import User
+from schemas.user import UserCreate
+from core import security
 import json
 
 async def test_register():

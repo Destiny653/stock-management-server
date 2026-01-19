@@ -1,7 +1,7 @@
 
 import asyncio
-from app.db.mongodb import init_db
-from app.models.user import User
+from db.mongodb import init_db
+from models.user import User
 
 async def promote_user():
     await init_db()

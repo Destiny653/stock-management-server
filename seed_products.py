@@ -1,9 +1,9 @@
 import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
 from beanie import init_beanie
-from app.models.product import Product, ProductCategory, ProductVariant, ProductStatus
-from app.models.organization import Organization
-from app.core.config import settings
+from models.product import Product, ProductCategory, ProductVariant, ProductStatus
+from models.organization import Organization
+from core.config import settings
 from datetime import datetime
 
 async def seed_data():
