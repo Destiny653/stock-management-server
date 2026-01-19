@@ -30,6 +30,7 @@ class Vendor(Document):
     organization_id: Indexed(str)
     user_id: Optional[str] = None  # Linked user account (stores contact info: name, email, phone)
     store_name: Indexed(str)  # Trading/Display name for the vendor's store
+    name: Optional[str] = None  # Legal/Business Name
     location_id: Optional[str] = None
     status: VendorStatus = VendorStatus.PENDING
     subscription_plan: VendorSubscriptionPlan = VendorSubscriptionPlan.BASIC

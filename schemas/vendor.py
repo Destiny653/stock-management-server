@@ -7,6 +7,7 @@ from models.vendor import VendorStatus, VendorSubscriptionPlan, VendorPaymentSta
 
 class VendorBase(BaseModel):
     store_name: str  # Trading/Display name for the vendor's store
+    name: Optional[str] = None
     location_id: Optional[str] = None
     status: VendorStatus = VendorStatus.PENDING
     subscription_plan: VendorSubscriptionPlan = VendorSubscriptionPlan.BASIC
@@ -27,6 +28,7 @@ class VendorCreate(VendorBase):
 
 class VendorUpdate(BaseModel):
     store_name: Optional[str] = None
+    name: Optional[str] = None
     location_id: Optional[str] = None
     status: Optional[VendorStatus] = None
     subscription_plan: Optional[VendorSubscriptionPlan] = None
