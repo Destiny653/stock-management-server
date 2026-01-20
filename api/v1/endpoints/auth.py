@@ -8,7 +8,7 @@ from pydantic import ValidationError
 from core import security
 from core.config import settings
 from models.user import User
-from schemas.token import Token, TokenPayload
+from schemas.token import Token, TokenPayload, RefreshToken
 from schemas.user import UserCreate, UserResponse, UserUpdate
 from api import deps
 from core.privileges import Privilege, ROLE_PERMISSIONS
@@ -80,19 +80,24 @@ async def logout(response: Response) -> Any:
 @router.post("/refresh-token", response_model=Token)
 async def refresh_token(
     response: Response,
+    refresh_in: Optional[RefreshToken] = None, # Using Body fallback if needed
     refresh_token: Optional[str] = Cookie(None),
 ) -> Any:
     """
-    Refresh access token using refresh token from cookie
+    Refresh access token using refresh token from cookie or body
     """
-    if not refresh_token:
+    token = refresh_token
+    if not token and refresh_in:
+        token = refresh_in.refresh_token
+        
+    if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Refresh token missing",
         )
 
     try:
-        payload = jwt.decode(refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         token_data = TokenPayload(**payload)
     except (jwt.JWTError, ValidationError):
         raise HTTPException(
