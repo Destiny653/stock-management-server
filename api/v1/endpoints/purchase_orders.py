@@ -15,17 +15,19 @@ router = APIRouter()
 
 @router.get("/", response_model=List[PurchaseOrderResponse])
 async def read_purchase_orders(
-    organization_id: str = Query(..., description="Organization ID to filter by"),
     skip: int = 0,
     limit: int = 100,
     status: Optional[str] = None,
     supplier_id: Optional[str] = None,
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
-    Retrieve purchase orders for a specific organization.
+    Retrieve purchase orders. Filtered by organization for non-superadmins.
     """
-    query = {"organization_id": organization_id}
+    query = {}
+    if organization_id:
+        query["organization_id"] = organization_id
     
     if status:
         query["status"] = status
@@ -39,13 +41,18 @@ async def read_purchase_orders(
 @router.post("/", response_model=PurchaseOrderResponse)
 async def create_purchase_order(
     po_in: PurchaseOrderCreate,
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
     Create new purchase order within an organization.
     """
+    data = po_in.model_dump()
+    if organization_id:
+        data["organization_id"] = organization_id
+        
     existing = await PurchaseOrder.find_one({
-        "organization_id": po_in.organization_id,
+        "organization_id": data["organization_id"],
         "po_number": po_in.po_number
     })
     if existing:
@@ -55,10 +62,9 @@ async def create_purchase_order(
         )
     
     # Convert POItemCreate to POItem
-    po_data = po_in.model_dump()
-    po_data["items"] = [POItem(**item) for item in po_data["items"]]
+    data["items"] = [POItem(**item) for item in data["items"]]
     
-    purchase_order = PurchaseOrder(**po_data)
+    purchase_order = PurchaseOrder(**data)
     await purchase_order.create()
     return purchase_order
 
@@ -66,16 +72,17 @@ async def create_purchase_order(
 @router.get("/{po_id}", response_model=PurchaseOrderResponse)
 async def read_purchase_order(
     po_id: str,
-    organization_id: str = Query(..., description="Organization ID"),
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
     Get purchase order by ID within an organization.
     """
-    purchase_order = await PurchaseOrder.find_one({
-        "_id": PydanticObjectId(po_id),
-        "organization_id": organization_id
-    })
+    query = {"_id": PydanticObjectId(po_id)}
+    if organization_id:
+        query["organization_id"] = organization_id
+        
+    purchase_order = await PurchaseOrder.find_one(query)
     if not purchase_order:
         raise HTTPException(status_code=404, detail="Purchase order not found")
     return purchase_order
@@ -85,21 +92,26 @@ async def read_purchase_order(
 async def update_purchase_order(
     po_id: str,
     po_in: PurchaseOrderUpdate,
-    organization_id: str = Query(..., description="Organization ID"),
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
     Update a purchase order within an organization.
     """
-    purchase_order = await PurchaseOrder.find_one({
-        "_id": PydanticObjectId(po_id),
-        "organization_id": organization_id
-    })
+    query = {"_id": PydanticObjectId(po_id)}
+    if organization_id:
+        query["organization_id"] = organization_id
+        
+    purchase_order = await PurchaseOrder.find_one(query)
     if not purchase_order:
         raise HTTPException(status_code=404, detail="Purchase order not found")
     
     update_data = po_in.model_dump(exclude_unset=True)
     
+    # Prevent organization_id modification
+    if "organization_id" in update_data:
+        del update_data["organization_id"]
+        
     # Convert items if present
     if "items" in update_data and update_data["items"]:
         update_data["items"] = [POItem(**item) for item in update_data["items"]]
@@ -113,16 +125,17 @@ async def update_purchase_order(
 @router.delete("/{po_id}", response_model=PurchaseOrderResponse)
 async def delete_purchase_order(
     po_id: str,
-    organization_id: str = Query(..., description="Organization ID"),
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
     Delete a purchase order within an organization.
     """
-    purchase_order = await PurchaseOrder.find_one({
-        "_id": PydanticObjectId(po_id),
-        "organization_id": organization_id
-    })
+    query = {"_id": PydanticObjectId(po_id)}
+    if organization_id:
+        query["organization_id"] = organization_id
+        
+    purchase_order = await PurchaseOrder.find_one(query)
     if not purchase_order:
         raise HTTPException(status_code=404, detail="Purchase order not found")
     await purchase_order.delete()
@@ -132,16 +145,17 @@ async def delete_purchase_order(
 @router.post("/{po_id}/approve", response_model=PurchaseOrderResponse)
 async def approve_purchase_order(
     po_id: str,
-    organization_id: str = Query(..., description="Organization ID"),
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
     Approve a purchase order.
     """
-    purchase_order = await PurchaseOrder.find_one({
-        "_id": po_id,
-        "organization_id": organization_id
-    })
+    query = {"_id": PydanticObjectId(po_id)}
+    if organization_id:
+        query["organization_id"] = organization_id
+        
+    purchase_order = await PurchaseOrder.find_one(query)
     if not purchase_order:
         raise HTTPException(status_code=404, detail="Purchase order not found")
     
@@ -161,23 +175,27 @@ async def approve_purchase_order(
 
 @router.get("/stats/summary", response_model=dict)
 async def get_po_stats(
-    organization_id: str = Query(..., description="Organization ID"),
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
     Get purchase order statistics for an organization.
     """
-    total = await PurchaseOrder.find({"organization_id": organization_id}).count()
+    query = {}
+    if organization_id:
+        query["organization_id"] = organization_id
+        
+    total = await PurchaseOrder.find(query).count()
     pending = await PurchaseOrder.find({
-        "organization_id": organization_id,
+        **query,
         "status": "pending_approval"
     }).count()
     ordered = await PurchaseOrder.find({
-        "organization_id": organization_id,
+        **query,
         "status": "ordered"
     }).count()
     received = await PurchaseOrder.find({
-        "organization_id": organization_id,
+        **query,
         "status": "received"
     }).count()
     
@@ -192,16 +210,17 @@ async def get_po_stats(
 @router.post("/{po_id}/receive", response_model=PurchaseOrderResponse)
 async def receive_purchase_order(
     po_id: str,
-    organization_id: str = Query(..., description="Organization ID"),
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
     Mark a purchase order as received and update product variant stock.
     """
-    purchase_order = await PurchaseOrder.find_one({
-        "_id": po_id,
-        "organization_id": organization_id
-    })
+    query = {"_id": PydanticObjectId(po_id)}
+    if organization_id:
+        query["organization_id"] = organization_id
+        
+    purchase_order = await PurchaseOrder.find_one(query)
     if not purchase_order:
         raise HTTPException(status_code=404, detail="Purchase order not found")
     
@@ -210,9 +229,10 @@ async def receive_purchase_order(
     
     # Update inventory for each item
     for item in purchase_order.items:
+        # Use organization_id from the PO itself for data consistency
         product = await Product.find_one({
             "_id": PydanticObjectId(item.product_id),
-            "organization_id": organization_id
+            "organization_id": purchase_order.organization_id
         })
         
         if product:
@@ -246,7 +266,7 @@ async def receive_purchase_order(
                 
                 # Create stock movement record
                 movement = StockMovement(
-                    organization_id=organization_id,
+                    organization_id=purchase_order.organization_id,
                     product_id=item.product_id,
                     product_name=product.name,
                     sku=item.sku or product.variants[variant_idx].sku,

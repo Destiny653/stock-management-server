@@ -43,18 +43,20 @@ async def upload_product_image(
 
 @router.get("/", response_model=List[ProductResponse])
 async def read_products(
-    organization_id: str = Query(..., description="Organization ID to filter by"),
     skip: int = 0,
     limit: int = 100,
     category: Optional[str] = None,
     status: Optional[str] = None,
     search: Optional[str] = None,
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
-    Retrieve products for a specific organization.
+    Retrieve products. Filtered by organization for non-superadmins.
     """
-    query = {"organization_id": organization_id}
+    query = {}
+    if organization_id:
+        query["organization_id"] = organization_id
     
     if category:
         query["category"] = category
@@ -73,16 +75,21 @@ async def read_products(
 @router.post("/", response_model=ProductResponse)
 async def create_product(
     product_in: ProductCreate,
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
     Create new product within an organization.
     """
+    data = product_in.model_dump()
+    if organization_id:
+        data["organization_id"] = organization_id
+        
     # Check if any variant SKUs already exist within the organization
     variant_skus = [v.sku for v in product_in.variants]
     if variant_skus:
         existing_product = await Product.find_one({
-            "organization_id": product_in.organization_id,
+            "organization_id": data["organization_id"],
             "variants.sku": {"$in": variant_skus}
         })
         if existing_product:
@@ -90,7 +97,7 @@ async def create_product(
                 status_code=400,
                 detail="A product with one of these SKUs already exists in this organization",
             )
-    product = Product(**product_in.model_dump())
+    product = Product(**data)
     await product.create()
     return product
 
@@ -98,7 +105,7 @@ async def create_product(
 @router.get("/{product_id}", response_model=ProductResponse)
 async def read_product(
     product_id: str,
-    organization_id: str = Query(..., description="Organization ID"),
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
@@ -109,10 +116,11 @@ async def read_product(
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid product ID format")
     
-    product = await Product.find_one({
-        "_id": obj_id,
-        "organization_id": organization_id
-    })
+    query = {"_id": obj_id}
+    if organization_id:
+        query["organization_id"] = organization_id
+        
+    product = await Product.find_one(query)
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
     return product
@@ -122,7 +130,7 @@ async def read_product(
 async def update_product(
     product_id: str,
     product_in: ProductUpdate,
-    organization_id: str = Query(..., description="Organization ID"),
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
@@ -133,10 +141,11 @@ async def update_product(
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid product ID format")
     
-    product = await Product.find_one({
-        "_id": obj_id,
-        "organization_id": organization_id
-    })
+    query = {"_id": obj_id}
+    if organization_id:
+        query["organization_id"] = organization_id
+        
+    product = await Product.find_one(query)
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
     
@@ -146,17 +155,22 @@ async def update_product(
     if "variants" in update_data:
         variant_skus = [v["sku"] for v in update_data["variants"]]
         if variant_skus:
-            existing_product = await Product.find_one({
-                "organization_id": organization_id,
+            sku_query = {
+                "organization_id": product.organization_id,
                 "_id": {"$ne": obj_id},
                 "variants.sku": {"$in": variant_skus}
-            })
+            }
+            existing_product = await Product.find_one(sku_query)
             if existing_product:
                 raise HTTPException(
                     status_code=400,
                     detail="One of the provided variant SKUs already exists in another product",
                 )
     
+    # Prevent organization_id modification
+    if "organization_id" in update_data:
+        del update_data["organization_id"]
+
     # Apply updates to the product object
     for key, value in update_data.items():
         setattr(product, key, value)
@@ -178,7 +192,7 @@ async def update_product(
 @router.delete("/{product_id}", response_model=ProductResponse)
 async def delete_product(
     product_id: str,
-    organization_id: str = Query(..., description="Organization ID"),
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
@@ -189,10 +203,11 @@ async def delete_product(
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid product ID format")
     
-    product = await Product.find_one({
-        "_id": obj_id,
-        "organization_id": organization_id
-    })
+    query = {"_id": obj_id}
+    if organization_id:
+        query["organization_id"] = organization_id
+        
+    product = await Product.find_one(query)
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
     await product.delete()
@@ -201,19 +216,22 @@ async def delete_product(
 
 @router.get("/low-stock/", response_model=List[ProductResponse])
 async def get_low_stock_products(
-    organization_id: str = Query(..., description="Organization ID"),
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
     Get products that are at or below their reorder point.
     """
-    products = await Product.find({
-        "organization_id": organization_id,
+    query = {
         "$expr": {
             "$lte": [
                 {"$sum": "$variants.stock"},
                 "$reorder_point"
             ]
         }
-    }).to_list()
+    }
+    if organization_id:
+        query["organization_id"] = organization_id
+        
+    products = await Product.find(query).to_list()
     return products

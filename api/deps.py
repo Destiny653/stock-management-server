@@ -69,16 +69,27 @@ async def get_current_active_superuser(
 def get_organization_id(
     organization_id: Optional[str] = None,
     current_user: User = Depends(get_current_active_user),
-) -> str:
+) -> Optional[str]:
     """
     Get organization ID - either from query param or from user's organization.
-    This can be used as a dependency for organization-scoped endpoints.
+    Enforces that non-superadmins can only access their own organization.
     """
-    if organization_id:
+    # If superadmin, they can access any organization if provided
+    if current_user.role in ["admin", "owner"]:
         return organization_id
-    if current_user.organization_id:
-        return current_user.organization_id
-    raise HTTPException(
-        status_code=400,
-        detail="Organization ID is required"
-    )
+
+    # For non-superadmins, they MUST have an organization_id
+    if not current_user.organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User is not assigned to any organization"
+        )
+    
+    # If they provided an organization_id, it MUST match their own
+    if organization_id and organization_id != current_user.organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to access this organization's data"
+        )
+        
+    return current_user.organization_id

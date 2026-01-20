@@ -13,19 +13,21 @@ router = APIRouter()
 
 @router.get("/", response_model=List[VendorResponse])
 async def read_vendors(
-    organization_id: str = Query(..., description="Organization ID to filter by"),
     skip: int = 0,
     limit: int = 100,
     status: Optional[str] = None,
     payment_status: Optional[str] = None,
     id: Optional[str] = None,
     search: Optional[str] = None,
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
-    Retrieve vendors for a specific organization.
+    Retrieve vendors. Filtered by organization for non-superadmins.
     """
-    query = {"organization_id": organization_id}
+    query = {}
+    if organization_id:
+        query["organization_id"] = organization_id
     
     if id:
         query["_id"] = PydanticObjectId(id)
@@ -46,15 +48,21 @@ async def read_vendors(
 @router.post("/", response_model=VendorResponse)
 async def create_vendor(
     vendor_in: VendorCreate,
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
     Create new vendor within an organization.
     """
+    # Enforce organization_id from dependency for non-superadmins
+    data = vendor_in.model_dump()
+    if organization_id:
+        data["organization_id"] = organization_id
+    
     # Check if vendor user already exists in organization
     if vendor_in.user_id:
         existing = await Vendor.find_one({
-            "organization_id": vendor_in.organization_id,
+            "organization_id": data["organization_id"],
             "user_id": vendor_in.user_id
         })
         if existing:
@@ -62,7 +70,7 @@ async def create_vendor(
                 status_code=400,
                 detail="A vendor with this user account already exists in this organization",
             )
-    vendor = Vendor(**vendor_in.model_dump())
+    vendor = Vendor(**data)
     await vendor.create()
     return vendor
 
@@ -70,16 +78,17 @@ async def create_vendor(
 @router.get("/{vendor_id}", response_model=VendorResponse)
 async def read_vendor(
     vendor_id: str,
-    organization_id: str = Query(..., description="Organization ID"),
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
     Get vendor by ID within an organization.
     """
-    vendor = await Vendor.find_one({
-        "_id": PydanticObjectId(vendor_id),
-        "organization_id": organization_id
-    })
+    query = {"_id": PydanticObjectId(vendor_id)}
+    if organization_id:
+        query["organization_id"] = organization_id
+        
+    vendor = await Vendor.find_one(query)
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
     return vendor
@@ -89,20 +98,25 @@ async def read_vendor(
 async def update_vendor(
     vendor_id: str,
     vendor_in: VendorUpdate,
-    organization_id: str = Query(..., description="Organization ID"),
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
     Update a vendor within an organization.
     """
-    vendor = await Vendor.find_one({
-        "_id": PydanticObjectId(vendor_id),
-        "organization_id": organization_id
-    })
+    query = {"_id": PydanticObjectId(vendor_id)}
+    if organization_id:
+        query["organization_id"] = organization_id
+        
+    vendor = await Vendor.find_one(query)
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
     
     update_data = vendor_in.model_dump(exclude_unset=True)
+    # Prevent organization_id modification via update
+    if "organization_id" in update_data:
+        del update_data["organization_id"]
+        
     update_data["updated_at"] = datetime.utcnow()
     await vendor.update({"$set": update_data})
     await vendor.save()
@@ -112,16 +126,17 @@ async def update_vendor(
 @router.delete("/{vendor_id}", response_model=VendorResponse)
 async def delete_vendor(
     vendor_id: str,
-    organization_id: str = Query(..., description="Organization ID"),
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
     Delete a vendor within an organization.
     """
-    vendor = await Vendor.find_one({
-        "_id": PydanticObjectId(vendor_id),
-        "organization_id": organization_id
-    })
+    query = {"_id": PydanticObjectId(vendor_id)}
+    if organization_id:
+        query["organization_id"] = organization_id
+        
+    vendor = await Vendor.find_one(query)
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
     await vendor.delete()
@@ -130,17 +145,23 @@ async def delete_vendor(
 
 @router.get("/stats/summary", response_model=dict)
 async def get_vendor_stats(
-    organization_id: str = Query(..., description="Organization ID"),
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
     Get vendor statistics for an organization.
     """
-    total = await Vendor.find({"organization_id": organization_id}).count()
-    active = await Vendor.find({"organization_id": organization_id, "status": "active"}).count()
-    pending = await Vendor.find({"organization_id": organization_id, "status": "pending"}).count()
+    if not organization_id:
+        # Superadmin with no org filter
+        query = {}
+    else:
+        query = {"organization_id": organization_id}
+        
+    total = await Vendor.find(query).count()
+    active = await Vendor.find({**query, "status": "active"}).count()
+    pending = await Vendor.find({**query, "status": "pending"}).count()
     overdue_payments = await Vendor.find({
-        "organization_id": organization_id,
+        **query,
         "payment_status": "overdue"
     }).count()
     

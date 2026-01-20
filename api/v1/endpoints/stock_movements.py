@@ -14,18 +14,20 @@ router = APIRouter()
 
 @router.get("/", response_model=List[StockMovementResponse])
 async def read_stock_movements(
-    organization_id: str = Query(..., description="Organization ID to filter by"),
     skip: int = 0,
     limit: int = 100,
     sort: Optional[str] = None,
     product_id: Optional[str] = None,
     movement_type: Optional[str] = None,
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
-    Retrieve stock movements for a specific organization.
+    Retrieve stock movements. Filtered by organization for non-superadmins.
     """
-    query = {"organization_id": organization_id}
+    query = {}
+    if organization_id:
+        query["organization_id"] = organization_id
     
     if product_id:
         query["product_id"] = product_id
@@ -35,6 +37,8 @@ async def read_stock_movements(
     q = StockMovement.find(query)
     if sort:
         q = q.sort(sort)
+    else:
+        q = q.sort("-created_at")
     
     movements = await q.skip(skip).limit(limit).to_list()
     return movements
@@ -43,15 +47,20 @@ async def read_stock_movements(
 @router.post("/", response_model=StockMovementResponse)
 async def create_stock_movement(
     movement_in: StockMovementCreate,
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
     Create new stock movement and update product quantities.
     """
+    data = movement_in.model_dump()
+    if organization_id:
+        data["organization_id"] = organization_id
+
     # Get the product
     product = await Product.find_one({
         "_id": PydanticObjectId(movement_in.product_id),
-        "organization_id": movement_in.organization_id
+        "organization_id": data["organization_id"]
     })
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -101,12 +110,11 @@ async def create_stock_movement(
     await product.save()
     
     # Create movement record
-    movement_data = movement_in.model_dump()
-    movement_data["product_name"] = product.name
-    movement_data["sku"] = variant.sku
-    movement_data["performed_by"] = str(current_user.id)
+    data["product_name"] = product.name
+    data["sku"] = variant.sku
+    data["performed_by"] = str(current_user.id)
     
-    movement = StockMovement(**movement_data)
+    movement = StockMovement(**data)
     await movement.create()
     return movement
 
@@ -114,16 +122,17 @@ async def create_stock_movement(
 @router.get("/{movement_id}", response_model=StockMovementResponse)
 async def read_stock_movement(
     movement_id: str,
-    organization_id: str = Query(..., description="Organization ID"),
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
     Get stock movement by ID within an organization.
     """
-    movement = await StockMovement.find_one({
-        "_id": PydanticObjectId(movement_id),
-        "organization_id": organization_id
-    })
+    query = {"_id": PydanticObjectId(movement_id)}
+    if organization_id:
+        query["organization_id"] = organization_id
+        
+    movement = await StockMovement.find_one(query)
     if not movement:
         raise HTTPException(status_code=404, detail="Stock movement not found")
     return movement
@@ -132,16 +141,17 @@ async def read_stock_movement(
 @router.get("/product/{product_id}/history", response_model=List[StockMovementResponse])
 async def get_product_movement_history(
     product_id: str,
-    organization_id: str = Query(..., description="Organization ID"),
     skip: int = 0,
     limit: int = 50,
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
     Get stock movement history for a specific product.
     """
-    movements = await StockMovement.find({
-        "organization_id": organization_id,
-        "product_id": product_id
-    }).sort("-created_at").skip(skip).limit(limit).to_list()
+    query = {"product_id": product_id}
+    if organization_id:
+        query["organization_id"] = organization_id
+        
+    movements = await StockMovement.find(query).sort("-created_at").skip(skip).limit(limit).to_list()
     return movements

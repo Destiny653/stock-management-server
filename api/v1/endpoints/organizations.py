@@ -54,6 +54,13 @@ async def read_organization(
     """
     Get organization by ID.
     """
+    # If not superadmin, they must belong to this organization
+    if current_user.role not in ["admin", "owner"] and current_user.organization_id != organization_id:
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission to access this organization's data"
+        )
+        
     organization = await Organization.get(organization_id)
     if not organization:
         raise HTTPException(status_code=404, detail="Organization not found")

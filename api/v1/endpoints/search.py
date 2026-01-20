@@ -21,17 +21,14 @@ class SearchResult(BaseModel):
 @router.get("/", response_model=List[SearchResult])
 async def general_search(
     q: str = Query(..., min_length=1, description="Search query"),
-    organization_id: Optional[str] = Query(None, description="Organization ID to filter by"),
     limit: int = 20,
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
     General search across Products, Vendors, and Suppliers.
-    Multi-tenant aware - filters by organization_id if provided or if user is tied to one.
+    Multi-tenant aware - filters by organization_id for non-superadmins.
     """
-    # Use user's organization_id if not explicitly provided, unless user is a super admin
-    effective_org_id = organization_id or current_user.organization_id
-    
     results = []
     search_regex = {"$regex": q, "$options": "i"}
     
@@ -44,8 +41,8 @@ async def general_search(
             {"variants.sku": search_regex}
         ]
     }
-    if effective_org_id:
-        product_query["organization_id"] = effective_org_id
+    if organization_id:
+        product_query["organization_id"] = organization_id
         
     products = await Product.find(product_query).limit(limit).to_list()
     for p in products:
@@ -66,8 +63,8 @@ async def general_search(
             {"email": search_regex}
         ]
     }
-    if effective_org_id:
-        vendor_query["organization_id"] = effective_org_id
+    if organization_id:
+        vendor_query["organization_id"] = organization_id
         
     vendors = await Vendor.find(vendor_query).limit(limit).to_list()
     for v in vendors:
@@ -88,8 +85,8 @@ async def general_search(
             {"email": search_regex}
         ]
     }
-    if effective_org_id:
-        supplier_query["organization_id"] = effective_org_id
+    if organization_id:
+        supplier_query["organization_id"] = organization_id
         
     suppliers = await Supplier.find(supplier_query).limit(limit).to_list()
     for s in suppliers:

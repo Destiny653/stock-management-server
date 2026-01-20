@@ -15,18 +15,20 @@ router = APIRouter()
 
 @router.get("/", response_model=List[SaleResponse])
 async def read_sales(
-    organization_id: str = Query(..., description="Organization ID to filter by"),
     skip: int = 0,
     limit: int = 100,
     status: Optional[str] = None,
     vendor_id: Optional[str] = None,
     payment_method: Optional[str] = None,
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
-    Retrieve sales for a specific organization.
+    Retrieve sales. Filtered by organization for non-superadmins.
     """
-    query = {"organization_id": organization_id}
+    query = {}
+    if organization_id:
+        query["organization_id"] = organization_id
     
     if status:
         query["status"] = status
@@ -42,13 +44,18 @@ async def read_sales(
 @router.post("/", response_model=SaleResponse)
 async def create_sale(
     sale_in: SaleCreate,
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
     Create new sale within an organization and update product quantities.
     """
+    data = sale_in.model_dump()
+    if organization_id:
+        data["organization_id"] = organization_id
+        
     existing = await Sale.find_one({
-        "organization_id": sale_in.organization_id,
+        "organization_id": data["organization_id"],
         "sale_number": sale_in.sale_number
     })
     if existing:
@@ -58,10 +65,9 @@ async def create_sale(
         )
     
     # Convert SaleItemCreate to SaleItem and update product quantities
-    sale_data = sale_in.model_dump()
     sale_items = []
     
-    for item in sale_data["items"]:
+    for item in data["items"]:
         # Update product quantity
         try:
             prod_id = PydanticObjectId(item["product_id"])
@@ -70,7 +76,7 @@ async def create_sale(
             
         product = await Product.find_one({
             "_id": prod_id,
-            "organization_id": sale_in.organization_id
+            "organization_id": data["organization_id"]
         })
         
         if product:
@@ -116,8 +122,8 @@ async def create_sale(
 
             # Create stock movement
             movement = StockMovement(
-                organization_id=sale_in.organization_id,
-                product_id=item["product_id"],
+                organization_id=data["organization_id"],
+                product_id=str(prod_id),
                 product_name=item["product_name"],
                 sku=item.get("sku"),
                 type=MovementType.DISPATCHED,
@@ -133,8 +139,8 @@ async def create_sale(
             )
         sale_items.append(SaleItem(**item))
     
-    sale_data["items"] = sale_items
-    sale = Sale(**sale_data)
+    data["items"] = sale_items
+    sale = Sale(**data)
     await sale.create()
     return sale
 
@@ -142,16 +148,17 @@ async def create_sale(
 @router.get("/{sale_id}", response_model=SaleResponse)
 async def read_sale(
     sale_id: str,
-    organization_id: str = Query(..., description="Organization ID"),
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
     Get sale by ID within an organization.
     """
-    sale = await Sale.find_one({
-        "_id": PydanticObjectId(sale_id),
-        "organization_id": organization_id
-    })
+    query = {"_id": PydanticObjectId(sale_id)}
+    if organization_id:
+        query["organization_id"] = organization_id
+        
+    sale = await Sale.find_one(query)
     if not sale:
         raise HTTPException(status_code=404, detail="Sale not found")
     return sale
@@ -161,21 +168,26 @@ async def read_sale(
 async def update_sale(
     sale_id: str,
     sale_in: SaleUpdate,
-    organization_id: str = Query(..., description="Organization ID"),
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
     Update a sale within an organization.
     """
-    sale = await Sale.find_one({
-        "_id": PydanticObjectId(sale_id),
-        "organization_id": organization_id
-    })
+    query = {"_id": PydanticObjectId(sale_id)}
+    if organization_id:
+        query["organization_id"] = organization_id
+        
+    sale = await Sale.find_one(query)
     if not sale:
         raise HTTPException(status_code=404, detail="Sale not found")
     
     update_data = sale_in.model_dump(exclude_unset=True)
     
+    # Prevent organization_id update
+    if "organization_id" in update_data:
+        del update_data["organization_id"]
+        
     # Convert items if present
     if "items" in update_data and update_data["items"]:
         update_data["items"] = [SaleItem(**item) for item in update_data["items"]]
@@ -189,16 +201,17 @@ async def update_sale(
 @router.delete("/{sale_id}", response_model=SaleResponse)
 async def delete_sale(
     sale_id: str,
-    organization_id: str = Query(..., description="Organization ID"),
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
     Delete a sale within an organization.
     """
-    sale = await Sale.find_one({
-        "_id": sale_id,
-        "organization_id": organization_id
-    })
+    query = {"_id": PydanticObjectId(sale_id)}
+    if organization_id:
+        query["organization_id"] = organization_id
+        
+    sale = await Sale.find_one(query)
     if not sale:
         raise HTTPException(status_code=404, detail="Sale not found")
     await sale.delete()
@@ -207,21 +220,25 @@ async def delete_sale(
 
 @router.get("/stats/summary", response_model=dict)
 async def get_sales_stats(
-    organization_id: str = Query(..., description="Organization ID"),
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
     Get sales statistics for an organization.
     """
-    total = await Sale.find({"organization_id": organization_id}).count()
+    query = {}
+    if organization_id:
+        query["organization_id"] = organization_id
+        
+    total = await Sale.find(query).count()
     completed = await Sale.find({
-        "organization_id": organization_id,
+        **query,
         "status": "completed"
     }).count()
     
     # Calculate total revenue
     all_sales = await Sale.find({
-        "organization_id": organization_id,
+        **query,
         "status": "completed"
     }).to_list()
     total_revenue = sum(sale.total for sale in all_sales)

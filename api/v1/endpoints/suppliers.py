@@ -13,17 +13,19 @@ router = APIRouter()
 
 @router.get("/", response_model=List[SupplierResponse])
 async def read_suppliers(
-    organization_id: str = Query(..., description="Organization ID to filter by"),
     skip: int = 0,
     limit: int = 100,
     status: Optional[str] = None,
     search: Optional[str] = None,
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
-    Retrieve suppliers for a specific organization.
+    Retrieve suppliers. Filtered by organization for non-superadmins.
     """
-    query = {"organization_id": organization_id}
+    query = {}
+    if organization_id:
+        query["organization_id"] = organization_id
     
     if status:
         query["status"] = status
@@ -39,15 +41,20 @@ async def read_suppliers(
 @router.post("/", response_model=SupplierResponse)
 async def create_supplier(
     supplier_in: SupplierCreate,
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
     Create new supplier within an organization.
     """
+    data = supplier_in.model_dump()
+    if organization_id:
+        data["organization_id"] = organization_id
+        
     # Check if supplier user already exists in organization
     if supplier_in.user_id:
         existing = await Supplier.find_one({
-            "organization_id": supplier_in.organization_id,
+            "organization_id": data["organization_id"],
             "user_id": supplier_in.user_id
         })
         if existing:
@@ -58,7 +65,7 @@ async def create_supplier(
     else:
         # Check if supplier with same name already exists in organization
         existing_name = await Supplier.find_one({
-            "organization_id": supplier_in.organization_id,
+            "organization_id": data["organization_id"],
             "name": supplier_in.name
         })
         if existing_name:
@@ -66,7 +73,7 @@ async def create_supplier(
                 status_code=400,
                 detail="A supplier with this name already exists in this organization",
             )
-    supplier = Supplier(**supplier_in.model_dump())
+    supplier = Supplier(**data)
     await supplier.create()
     return supplier
 
@@ -74,16 +81,17 @@ async def create_supplier(
 @router.get("/{supplier_id}", response_model=SupplierResponse)
 async def read_supplier(
     supplier_id: str,
-    organization_id: str = Query(..., description="Organization ID"),
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
     Get supplier by ID within an organization.
     """
-    supplier = await Supplier.find_one({
-        "_id": PydanticObjectId(supplier_id),
-        "organization_id": organization_id
-    })
+    query = {"_id": PydanticObjectId(supplier_id)}
+    if organization_id:
+        query["organization_id"] = organization_id
+        
+    supplier = await Supplier.find_one(query)
     if not supplier:
         raise HTTPException(status_code=404, detail="Supplier not found")
     return supplier
@@ -93,20 +101,25 @@ async def read_supplier(
 async def update_supplier(
     supplier_id: str,
     supplier_in: SupplierUpdate,
-    organization_id: str = Query(..., description="Organization ID"),
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
     Update a supplier within an organization.
     """
-    supplier = await Supplier.find_one({
-        "_id": PydanticObjectId(supplier_id),
-        "organization_id": organization_id
-    })
+    query = {"_id": PydanticObjectId(supplier_id)}
+    if organization_id:
+        query["organization_id"] = organization_id
+        
+    supplier = await Supplier.find_one(query)
     if not supplier:
         raise HTTPException(status_code=404, detail="Supplier not found")
     
     update_data = supplier_in.model_dump(exclude_unset=True)
+    # Prevent organization_id modification
+    if "organization_id" in update_data:
+        del update_data["organization_id"]
+        
     update_data["updated_at"] = datetime.utcnow()
     await supplier.update({"$set": update_data})
     await supplier.save()
@@ -116,16 +129,17 @@ async def update_supplier(
 @router.delete("/{supplier_id}", response_model=SupplierResponse)
 async def delete_supplier(
     supplier_id: str,
-    organization_id: str = Query(..., description="Organization ID"),
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
     Delete a supplier within an organization.
     """
-    supplier = await Supplier.find_one({
-        "_id": PydanticObjectId(supplier_id),
-        "organization_id": organization_id
-    })
+    query = {"_id": PydanticObjectId(supplier_id)}
+    if organization_id:
+        query["organization_id"] = organization_id
+        
+    supplier = await Supplier.find_one(query)
     if not supplier:
         raise HTTPException(status_code=404, detail="Supplier not found")
     await supplier.delete()

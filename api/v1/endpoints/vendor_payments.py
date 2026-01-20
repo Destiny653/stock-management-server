@@ -14,18 +14,20 @@ router = APIRouter()
 
 @router.get("/", response_model=List[VendorPaymentResponse])
 async def read_vendor_payments(
-    organization_id: str = Query(..., description="Organization ID to filter by"),
     skip: int = 0,
     limit: int = 100,
     vendor_id: Optional[str] = None,
     status: Optional[str] = None,
     payment_type: Optional[str] = None,
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
-    Retrieve vendor payments for a specific organization.
+    Retrieve vendor payments. Filtered by organization for non-superadmins.
     """
-    query = {"organization_id": organization_id}
+    query = {}
+    if organization_id:
+        query["organization_id"] = organization_id
     
     if vendor_id:
         query["vendor_id"] = vendor_id
@@ -41,23 +43,27 @@ async def read_vendor_payments(
 @router.post("/", response_model=VendorPaymentResponse)
 async def create_vendor_payment(
     payment_in: VendorPaymentCreate,
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
     Create new vendor payment within an organization.
     """
+    data = payment_in.model_dump()
+    if organization_id:
+        data["organization_id"] = organization_id
+
     # Verify vendor exists
     vendor = await Vendor.find_one({
         "_id": PydanticObjectId(payment_in.vendor_id),
-        "organization_id": payment_in.organization_id
+        "organization_id": data["organization_id"]
     })
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
     
-    payment_data = payment_in.model_dump()
-    payment_data["vendor_name"] = vendor.name
+    data["vendor_name"] = vendor.name
     
-    payment = VendorPayment(**payment_data)
+    payment = VendorPayment(**data)
     await payment.create()
     return payment
 
@@ -65,16 +71,17 @@ async def create_vendor_payment(
 @router.get("/{payment_id}", response_model=VendorPaymentResponse)
 async def read_vendor_payment(
     payment_id: str,
-    organization_id: str = Query(..., description="Organization ID"),
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
     Get vendor payment by ID within an organization.
     """
-    payment = await VendorPayment.find_one({
-        "_id": PydanticObjectId(payment_id),
-        "organization_id": organization_id
-    })
+    query = {"_id": PydanticObjectId(payment_id)}
+    if organization_id:
+        query["organization_id"] = organization_id
+
+    payment = await VendorPayment.find_one(query)
     if not payment:
         raise HTTPException(status_code=404, detail="Vendor payment not found")
     return payment
@@ -84,21 +91,27 @@ async def read_vendor_payment(
 async def update_vendor_payment(
     payment_id: str,
     payment_in: VendorPaymentUpdate,
-    organization_id: str = Query(..., description="Organization ID"),
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
     Update a vendor payment within an organization.
     """
-    payment = await VendorPayment.find_one({
-        "_id": PydanticObjectId(payment_id),
-        "organization_id": organization_id
-    })
+    query = {"_id": PydanticObjectId(payment_id)}
+    if organization_id:
+        query["organization_id"] = organization_id
+
+    payment = await VendorPayment.find_one(query)
     if not payment:
         raise HTTPException(status_code=404, detail="Vendor payment not found")
     
     update_data = payment_in.model_dump(exclude_unset=True)
     update_data["updated_at"] = datetime.utcnow()
+    
+    # Prevent organization_id modification
+    if "organization_id" in update_data:
+        del update_data["organization_id"]
+
     await payment.update({"$set": update_data})
     await payment.save()
     return payment
@@ -107,16 +120,17 @@ async def update_vendor_payment(
 @router.delete("/{payment_id}", response_model=VendorPaymentResponse)
 async def delete_vendor_payment(
     payment_id: str,
-    organization_id: str = Query(..., description="Organization ID"),
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
     Delete a vendor payment within an organization.
     """
-    payment = await VendorPayment.find_one({
-        "_id": PydanticObjectId(payment_id),
-        "organization_id": organization_id
-    })
+    query = {"_id": PydanticObjectId(payment_id)}
+    if organization_id:
+        query["organization_id"] = organization_id
+
+    payment = await VendorPayment.find_one(query)
     if not payment:
         raise HTTPException(status_code=404, detail="Vendor payment not found")
     await payment.delete()
@@ -126,16 +140,17 @@ async def delete_vendor_payment(
 @router.post("/{payment_id}/confirm", response_model=VendorPaymentResponse)
 async def confirm_vendor_payment(
     payment_id: str,
-    organization_id: str = Query(..., description="Organization ID"),
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
     Confirm a vendor payment and update vendor payment status.
     """
-    payment = await VendorPayment.find_one({
-        "_id": PydanticObjectId(payment_id),
-        "organization_id": organization_id
-    })
+    query = {"_id": PydanticObjectId(payment_id)}
+    if organization_id:
+        query["organization_id"] = organization_id
+
+    payment = await VendorPayment.find_one(query)
     if not payment:
         raise HTTPException(status_code=404, detail="Vendor payment not found")
     
@@ -154,7 +169,10 @@ async def confirm_vendor_payment(
     })
     
     # Update vendor payment status
-    vendor = await Vendor.find_one({"_id": PydanticObjectId(payment.vendor_id)})
+    vendor = await Vendor.find_one({
+        "_id": PydanticObjectId(payment.vendor_id),
+        "organization_id": payment.organization_id
+    })
     if vendor:
         await vendor.update({
             "$set": {
@@ -171,16 +189,17 @@ async def confirm_vendor_payment(
 @router.get("/vendor/{vendor_id}/history", response_model=List[VendorPaymentResponse])
 async def get_vendor_payment_history(
     vendor_id: str,
-    organization_id: str = Query(..., description="Organization ID"),
     skip: int = 0,
     limit: int = 50,
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
     Get payment history for a specific vendor.
     """
-    payments = await VendorPayment.find({
-        "organization_id": organization_id,
-        "vendor_id": vendor_id
-    }).sort("-created_at").skip(skip).limit(limit).to_list()
+    query = {"vendor_id": vendor_id}
+    if organization_id:
+        query["organization_id"] = organization_id
+
+    payments = await VendorPayment.find(query).sort("-created_at").skip(skip).limit(limit).to_list()
     return payments

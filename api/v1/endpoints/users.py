@@ -13,17 +13,19 @@ router = APIRouter()
 
 @router.get("/", response_model=List[UserResponse])
 async def read_users(
-    organization_id: str = Query(..., description="Organization ID to filter by"),
     skip: int = 0,
     limit: int = 100,
     role: Optional[str] = None,
     status: Optional[str] = None,
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
-    Retrieve users for a specific organization.
+    Retrieve users. Filtered by organization for non-superadmins.
     """
-    query = {"organization_id": organization_id}
+    query = {}
+    if organization_id:
+        query["organization_id"] = organization_id
     
     if role:
         query["role"] = role
