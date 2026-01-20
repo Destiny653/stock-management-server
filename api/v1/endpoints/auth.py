@@ -37,19 +37,27 @@ async def login_access_token(
     # 2 days in seconds = 172800
     refresh_token = security.create_refresh_token(str(user.id))
     
+    cookie_settings = {
+        "httponly": True,
+        "max_age": settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        "samesite": "none" if settings.ENVIRONMENT == "production" else "lax",
+        "secure": True if settings.ENVIRONMENT == "production" else False,
+    }
+    
     response.set_cookie(
         key="access_token",
         value=access_token,
-        httponly=True,
-        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        samesite="lax",
+        **cookie_settings
     )
+    
+    # Refresh token specific settings
+    refresh_cookie_settings = cookie_settings.copy()
+    refresh_cookie_settings["max_age"] = 172800 # 2 days
+    
     response.set_cookie(
         key="refresh_token",
         value=refresh_token,
-        httponly=True,
-        max_age=172800,
-        samesite="lax",
+        **refresh_cookie_settings
     )
     
     return {
@@ -110,19 +118,27 @@ async def refresh_token(
     )
     new_refresh_token = security.create_refresh_token(str(user.id))
     
+    cookie_settings = {
+        "httponly": True,
+        "max_age": settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        "samesite": "none" if settings.ENVIRONMENT == "production" else "lax",
+        "secure": True if settings.ENVIRONMENT == "production" else False,
+    }
+    
     response.set_cookie(
         key="access_token",
         value=new_access_token,
-        httponly=True,
-        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        samesite="lax",
+        **cookie_settings
     )
+    
+    # Refresh token specific settings
+    refresh_cookie_settings = cookie_settings.copy()
+    refresh_cookie_settings["max_age"] = 172800 # 2 days
+    
     response.set_cookie(
         key="refresh_token",
         value=new_refresh_token,
-        httponly=True,
-        max_age=172800,
-        samesite="lax",
+        **refresh_cookie_settings
     )
 
     return {

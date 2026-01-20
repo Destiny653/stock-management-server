@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     MONGODB_URL: str = "mongodb://localhost:27017"
     MONGODB_DB_NAME: str = "stockflow_db"
     
+    # Environment
+    ENVIRONMENT: str = "development" # "development" or "production"
+    
     # Security
     SECRET_KEY: str = "CHANGE_THIS_TO_A_SECURE_SECRET_KEY_IN_PRODUCTION"
     ALGORITHM: str = "HS256"
