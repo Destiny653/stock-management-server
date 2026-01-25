@@ -14,8 +14,6 @@ class OrganizationBase(BaseModel):
     email: Optional[EmailStr] = None
     website: Optional[str] = None
     logo_url: Optional[str] = None
-    city: Optional[str] = None
-    country: Optional[str] = None
     status: OrganizationStatus = OrganizationStatus.ACTIVE
     subscription_plan: SubscriptionPlan = SubscriptionPlan.STARTER
     max_vendors: int = 10
@@ -34,8 +32,7 @@ class OrganizationUpdate(BaseModel):
     email: Optional[EmailStr] = None
     website: Optional[str] = None
     logo_url: Optional[str] = None
-    city: Optional[str] = None
-    country: Optional[str] = None
+
     status: Optional[OrganizationStatus] = None
     subscription_plan: Optional[SubscriptionPlan] = None
     max_vendors: Optional[int] = None
