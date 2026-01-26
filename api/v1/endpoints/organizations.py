@@ -30,10 +30,10 @@ async def read_organizations(
 @router.post("/", response_model=OrganizationResponse)
 async def create_organization(
     organization_in: OrganizationCreate,
-    current_user: User = Depends(deps.get_current_active_superuser),
+    current_user: Optional[User] = None, # Depends(deps.get_current_active_superuser),
 ) -> Any:
     """
-    Create new organization (admin only).
+    Create new organization (Public for registration).
     """
     org = await Organization.find_one(Organization.code == organization_in.code)
     if org:

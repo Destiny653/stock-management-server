@@ -1,5 +1,5 @@
 """Models package - Export all models"""
-from models.organization import Organization, OrganizationStatus, SubscriptionPlan
+from models.organization import Organization, OrganizationStatus
 from models.user import User, UserRole, UserStatus, UserType, UserPreferences
 from models.product import Product, ProductCategory, ProductStatus
 from models.supplier import Supplier, PaymentTerms, SupplierStatus

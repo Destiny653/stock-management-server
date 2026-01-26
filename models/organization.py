@@ -12,12 +12,6 @@ class OrganizationStatus(str, Enum):
     SUSPENDED = "suspended"
 
 
-class SubscriptionPlan(str, Enum):
-    STARTER = "starter"
-    BUSINESS = "business"
-    ENTERPRISE = "enterprise"
-
-
 class Organization(Document):
     name: Indexed(str)
     code: Indexed(str, unique=True)
@@ -30,7 +24,7 @@ class Organization(Document):
     city: Optional[str] = None
     country: Optional[str] = None
     status: OrganizationStatus = OrganizationStatus.ACTIVE
-    subscription_plan: SubscriptionPlan = SubscriptionPlan.STARTER
+    subscription_plan_id: Optional[str] = None
     max_vendors: int = 10
     max_users: int = 5
     created_at: datetime = Field(default_factory=datetime.utcnow)

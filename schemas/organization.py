@@ -2,7 +2,7 @@
 from typing import Optional
 from datetime import datetime
 from pydantic import BaseModel, EmailStr
-from models.organization import OrganizationStatus, SubscriptionPlan
+from models.organization import OrganizationStatus
 
 
 class OrganizationBase(BaseModel):
@@ -15,9 +15,8 @@ class OrganizationBase(BaseModel):
     website: Optional[str] = None
     logo_url: Optional[str] = None
     status: OrganizationStatus = OrganizationStatus.ACTIVE
-    subscription_plan: SubscriptionPlan = SubscriptionPlan.STARTER
-    max_vendors: int = 10
-    max_users: int = 5
+    status: OrganizationStatus = OrganizationStatus.ACTIVE
+    subscription_plan_id: Optional[str] = None
 
 
 class OrganizationCreate(OrganizationBase):
@@ -34,9 +33,8 @@ class OrganizationUpdate(BaseModel):
     logo_url: Optional[str] = None
 
     status: Optional[OrganizationStatus] = None
-    subscription_plan: Optional[SubscriptionPlan] = None
-    max_vendors: Optional[int] = None
-    max_users: Optional[int] = None
+    status: Optional[OrganizationStatus] = None
+    subscription_plan_id: Optional[str] = None
 
 
 from beanie import PydanticObjectId

@@ -36,5 +36,6 @@ async def init_db():
             Alert,
             VendorPayment,
             Location,
+            "models.subscription_plan.SubscriptionPlan",
         ]
     )

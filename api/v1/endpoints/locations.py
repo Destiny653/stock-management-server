@@ -30,11 +30,11 @@ async def read_locations(
 @router.post("/", response_model=LocationResponse)
 async def create_location(
     location_in: LocationCreate,
-    organization_id: Optional[str] = Depends(deps.get_organization_id),
-    current_user: User = Depends(deps.get_current_active_user),
+    organization_id: Optional[str] = None, # Depends(deps.get_organization_id),
+    current_user: Optional[User] = None, # Depends(deps.get_current_active_user),
 ) -> Any:
     """
-    Create new location within an organization.
+    Create new location (Public for registration).
     """
     data = location_in.model_dump()
     if organization_id:
