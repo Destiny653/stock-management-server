@@ -15,7 +15,6 @@ class OrganizationBase(BaseModel):
     website: Optional[str] = None
     logo_url: Optional[str] = None
     status: OrganizationStatus = OrganizationStatus.ACTIVE
-    status: OrganizationStatus = OrganizationStatus.ACTIVE
     subscription_plan_id: Optional[str] = None
 
 
@@ -31,8 +30,6 @@ class OrganizationUpdate(BaseModel):
     email: Optional[EmailStr] = None
     website: Optional[str] = None
     logo_url: Optional[str] = None
-
-    status: Optional[OrganizationStatus] = None
     status: Optional[OrganizationStatus] = None
     subscription_plan_id: Optional[str] = None
 
