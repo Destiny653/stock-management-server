@@ -18,11 +18,6 @@ from models.organization import Organization, OrganizationStatus
 from models.location import Location
 from pydantic import BaseModel
 
-class OrganizationRegisterRequest(BaseModel):
-    user: UserCreate
-    organization: OrganizationCreate
-    location: LocationCreate
-
 router = APIRouter()
 
 
@@ -197,65 +192,6 @@ async def register_user(
     
     user = User(**user_data)
     await user.create()
-    return user
-
-
-@router.post("/register-organization", response_model=UserResponse)
-async def register_organization(
-    data: OrganizationRegisterRequest,
-) -> Any:
-    """
-    Register a new organization, location, and admin user
-    """
-    # 1. Check if user exists
-    user = await User.find_one(User.email == data.user.email)
-    if user:
-        raise HTTPException(
-            status_code=400,
-            detail="The user with this email already exists in the system",
-        )
-    
-    # 2. Create Location
-    location = Location(**data.location.model_dump())
-    await location.create()
-    
-    # 3. Create Organization
-    org_data = data.organization.model_dump()
-    org_data["location_id"] = str(location.id)
-    org_data["status"] = OrganizationStatus.ACTIVE # Or pending if trial logic requires
-    
-    # Ensure code is unique? Usually handled by model/db constraint or check
-    existing_org = await Organization.find_one(Organization.code == org_data["code"])
-    if existing_org:
-        # Rollback location?
-        await location.delete()
-        raise HTTPException(
-            status_code=400,
-            detail="Organization code already taken",
-        )
-
-    organization = Organization(**org_data)
-    await organization.create()
-    
-    # 4. Create User (Admin)
-    hashed_password = security.get_password_hash(data.user.password)
-    user_data = data.user.model_dump(exclude={"password"})
-    user_data["hashed_password"] = hashed_password
-    user_data["organization_id"] = str(organization.id)
-    user_data["role"] = "admin"
-    user_data["user_type"] = "admin"
-    user_data["status"] = "active"
-    
-    # Assign Admin permissions
-    user_data["permissions"] = ROLE_PERMISSIONS.get("admin", [])
-    
-    user = User(**user_data)
-    await user.create()
-    
-    # Update organization owner? Optional
-    # organization.owner_id = str(user.id)
-    # await organization.save()
-    
     return user
 
 
