@@ -17,8 +17,8 @@ class UserBase(BaseModel):
     job_title: Optional[str] = None  # Added
     bio: Optional[str] = None        # Added
     avatar: Optional[str] = None
-    role: UserRole = UserRole.STAFF
-    user_type: UserType = UserType.STAFF
+    role: UserRole = UserRole.ADMIN  # Default to admin for business registration
+    user_type: UserType = UserType.BUSINESS_STAFF
     permissions: List[Privilege] = []
     warehouse_access: List[str] = []
 

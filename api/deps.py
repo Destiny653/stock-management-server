@@ -58,8 +58,9 @@ async def get_current_active_user(
 async def get_current_active_superuser(
     current_user: User = Depends(get_current_user),
 ) -> User:
-    """Get current active superuser (admin)"""
-    if current_user.role not in ["admin", "owner"]:
+    """Get current active superuser (platform-staff with admin role)"""
+    # Platform staff can manage the entire platform
+    if current_user.user_type != "platform-staff":
         raise HTTPException(
             status_code=400, detail="The user doesn't have enough privileges"
         )
@@ -72,10 +73,11 @@ def get_organization_id(
 ) -> Optional[str]:
     """
     Get organization ID - either from query param or from user's organization.
-    Enforces that non-superadmins can only access their own organization.
+    Enforces that business-staff can only access their own organization.
+    Platform-staff can access any organization.
     """
-    # If superadmin, they can access any organization if provided
-    if current_user.role in ["admin", "owner"]:
+    # Platform staff can access any organization
+    if current_user.user_type == "platform-staff":
         return organization_id
 
     # For non-superadmins, they MUST have an organization_id

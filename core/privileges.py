@@ -57,6 +57,12 @@ ROLE_PERMISSIONS = {
         Privilege.USERS_MANAGE.value,
         Privilege.REPORTS_VIEW.value,
     ],
+    "vendor": [
+        Privilege.PRODUCTS_READ.value,
+        Privilege.STOCK_READ.value,
+        Privilege.SALES_CREATE.value,
+        Privilege.SALES_READ.value,
+    ],
     "staff": [
         Privilege.PRODUCTS_READ.value,
         Privilege.STOCK_READ.value,
@@ -64,16 +70,18 @@ ROLE_PERMISSIONS = {
         Privilege.SALES_READ.value,
         Privilege.PO_READ.value,
     ],
-    "vendor": [
+    "user": [
         Privilege.PRODUCTS_READ.value,
         Privilege.STOCK_READ.value,
         Privilege.SALES_CREATE.value,
         Privilege.SALES_READ.value,
+        Privilege.PO_READ.value,
     ],
     "viewer": [
         Privilege.PRODUCTS_READ.value,
         Privilege.STOCK_READ.value,
         Privilege.SALES_READ.value,
+        Privilege.PO_READ.value,
         Privilege.REPORTS_VIEW.value,
-    ]
+    ],
 }

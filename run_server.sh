@@ -12,4 +12,5 @@ echo "Installing requirements..."
 pip install -r requirements.txt
 
 echo "Starting server..."
+# uvicorn main:app --reload --host [IP_ADDRESS] --port 8000 --ssl-keyfile ./ssl/key.pem --ssl-certfile ./ssl/cert.pem
 uvicorn main:app --reload

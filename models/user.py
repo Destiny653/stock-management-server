@@ -11,8 +11,10 @@ class UserRole(str, Enum):
     OWNER = "owner"
     ADMIN = "admin"
     MANAGER = "manager"
+    VENDOR = "vendor"
     STAFF = "staff"
     VIEWER = "viewer"
+    USER = "user"
 
 
 class UserStatus(str, Enum):
@@ -23,10 +25,8 @@ class UserStatus(str, Enum):
 
 
 class UserType(str, Enum):
-    ADMIN = "admin"
-    VENDOR = "vendor"
-    MANAGER = "manager"
-    STAFF = "staff"
+    PLATFORM_STAFF = "platform-staff"
+    BUSINESS_STAFF = "business-staff"
 
 
 class NotificationPreferences(BaseModel):
@@ -59,8 +59,8 @@ class User(Document):
     job_title: Optional[str] = None   # Added
     bio: Optional[str] = None         # Added
     avatar: Optional[str] = None
-    role: UserRole = UserRole.STAFF
-    user_type: UserType = UserType.STAFF
+    role: UserRole = UserRole.USER
+    user_type: UserType = UserType.BUSINESS_STAFF
     permissions: List[Privilege] = []
     warehouse_access: List[str] = []  # IDs of warehouses user can access
     status: UserStatus = UserStatus.PENDING
