@@ -27,6 +27,7 @@ class UserStatus(str, Enum):
 class UserType(str, Enum):
     PLATFORM_STAFF = "platform-staff"
     BUSINESS_STAFF = "business-staff"
+    STAFF = "staff"
 
 
 class NotificationPreferences(BaseModel):

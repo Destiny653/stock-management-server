@@ -67,16 +67,25 @@ async def create_user(
 @router.get("/{user_id}", response_model=UserResponse)
 async def read_user(
     user_id: str,
-    organization_id: str = Query(..., description="Organization ID"),
+    organization_id: Optional[str] = Query(None, description="Organization ID"),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
-    Get user by ID within an organization.
+    Get user by ID. Platform staff can access any user.
     """
-    user = await User.find_one({
-        "_id": PydanticObjectId(user_id),
-        "organization_id": organization_id
-    })
+    query = {"_id": PydanticObjectId(user_id)}
+    
+    # If not platform staff, enforce organization access
+    if current_user.user_type != "platform-staff":
+        if not current_user.organization_id:
+             raise HTTPException(status_code=403, detail="User not associated with organization")
+        # Ensure searching within own organization
+        query["organization_id"] = current_user.organization_id
+    elif organization_id:
+        # If platform staff provided org id, filter by it (optional)
+        query["organization_id"] = organization_id
+
+    user = await User.find_one(query)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return user
@@ -86,16 +95,22 @@ async def read_user(
 async def update_user(
     user_id: str,
     user_in: UserUpdate,
-    organization_id: str = Query(..., description="Organization ID"),
+    organization_id: Optional[str] = Query(None, description="Organization ID"),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
-    Update a user within an organization.
+    Update a user. Platform staff can update any user.
     """
-    user = await User.find_one({
-        "_id": PydanticObjectId(user_id),
-        "organization_id": organization_id
-    })
+    query = {"_id": PydanticObjectId(user_id)}
+    
+    if current_user.user_type != "platform-staff":
+        if not current_user.organization_id:
+             raise HTTPException(status_code=403, detail="User not associated with organization")
+        query["organization_id"] = current_user.organization_id
+    elif organization_id:
+        query["organization_id"] = organization_id
+        
+    user = await User.find_one(query)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -116,16 +131,22 @@ async def update_user(
 @router.delete("/{user_id}", response_model=UserResponse)
 async def delete_user(
     user_id: str,
-    organization_id: str = Query(..., description="Organization ID"),
+    organization_id: Optional[str] = Query(None, description="Organization ID"),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
-    Delete a user within an organization.
+    Delete a user. Platform staff can delete any user.
     """
-    user = await User.find_one({
-        "_id": PydanticObjectId(user_id),
-        "organization_id": organization_id
-    })
+    query = {"_id": PydanticObjectId(user_id)}
+    
+    if current_user.user_type != "platform-staff":
+        if not current_user.organization_id:
+             raise HTTPException(status_code=403, detail="User not associated with organization")
+        query["organization_id"] = current_user.organization_id
+    elif organization_id:
+        query["organization_id"] = organization_id
+
+    user = await User.find_one(query)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
