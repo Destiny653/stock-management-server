@@ -33,7 +33,7 @@ class ProductBase(BaseModel):
 
 
 class ProductCreate(ProductBase):
-    organization_id: str
+    organization_id: Optional[str] = None
 
 
 class ProductUpdate(BaseModel):

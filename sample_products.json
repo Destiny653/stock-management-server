@@ -1,0 +1,374 @@
+[
+    {
+        "name": "SuperPhone Z1",
+        "category": "Electronics",
+        "description": "Latest flagship smartphone with 5G support and triple camera system.",
+        "supplier_id": "6980971ff746215690595064",
+        "supplier_name": "TechGlobal Distribution",
+        "reorder_point": 10,
+        "reorder_quantity": 50,
+        "status": "active",
+        "image_url": "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9",
+        "expiry_date": "2030-12-31",
+        "last_restocked": "2026-02-01",
+        "variants": [
+            {
+                "sku": "SP-Z1-128-BLK",
+                "attributes": {
+                    "color": "Midnight Black",
+                    "storage": "128GB"
+                },
+                "unit_price": 899.0,
+                "cost_price": 550.0,
+                "stock": 30,
+                "barcode": "8901234567890"
+            },
+            {
+                "sku": "SP-Z1-256-SLV",
+                "attributes": {
+                    "color": "Stellar Silver",
+                    "storage": "256GB"
+                },
+                "unit_price": 999.0,
+                "cost_price": 620.0,
+                "stock": 15,
+                "barcode": "8901234567891"
+            }
+        ]
+    },
+    {
+        "name": "Classic Crewneck T-Shirt",
+        "category": "Clothing",
+        "description": "Premium 100% organic cotton t-shirt for daily comfort.",
+        "supplier_id": "6980971ff746215690595064",
+        "supplier_name": "EcoThread Apparel",
+        "reorder_point": 100,
+        "reorder_quantity": 500,
+        "location_id": "loc_beta",
+        "status": "active",
+        "image_url": "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab",
+        "expiry_date": null,
+        "last_restocked": "2026-01-15",
+        "variants": [
+            {
+                "sku": "TS-CLS-S-WHT",
+                "attributes": {
+                    "size": "Small",
+                    "color": "White"
+                },
+                "unit_price": 25.0,
+                "cost_price": 10.0,
+                "stock": 200
+            },
+            {
+                "sku": "TS-CLS-M-WHT",
+                "attributes": {
+                    "size": "Medium",
+                    "color": "White"
+                },
+                "unit_price": 25.0,
+                "cost_price": 10.0,
+                "stock": 150
+            },
+            {
+                "sku": "TS-CLS-L-BLK",
+                "attributes": {
+                    "size": "Large",
+                    "color": "Black"
+                },
+                "unit_price": 25.0,
+                "cost_price": 10.0,
+                "stock": 120
+            }
+        ]
+    },
+    {
+        "name": "Artisan Arabica Coffee",
+        "category": "Food & Beverage",
+        "description": "Single-origin whole bean coffee with notes of chocolate and citrus.",
+        "supplier_id": "6980971ff746215690595064",
+        "supplier_name": "Peak Roasters",
+        "reorder_point": 20,
+        "reorder_quantity": 100,
+        "location_id": "loc_gamma",
+        "status": "active",
+        "image_url": "https://images.unsplash.com/photo-1559056199-641a0ac8b55e",
+        "expiry_date": "2026-08-15",
+        "last_restocked": "2026-01-28",
+        "variants": [
+            {
+                "sku": "CF-ART-250G",
+                "attributes": {
+                    "weight": "250g",
+                    "grind": "Whole Bean"
+                },
+                "unit_price": 15.0,
+                "cost_price": 7.0,
+                "stock": 45
+            },
+            {
+                "sku": "CF-ART-500G",
+                "attributes": {
+                    "weight": "500g",
+                    "grind": "Whole Bean"
+                },
+                "unit_price": 28.0,
+                "cost_price": 13.0,
+                "stock": 30
+            }
+        ]
+    },
+    {
+        "name": "Modern Minimalist Desk Lamp",
+        "category": "Home & Garden",
+        "description": "Adjustable LED desk lamp with touch controls and USB charging port.",
+        "supplier_id": "6980971ff746215690595064",
+        "supplier_name": "Lumina Home Goods",
+        "reorder_point": 5,
+        "reorder_quantity": 20,
+        "location_id": "loc_delta",
+        "status": "active",
+        "image_url": "https://images.unsplash.com/photo-1534073828943-f801091bb18c",
+        "expiry_date": null,
+        "last_restocked": "2026-01-10",
+        "variants": [
+            {
+                "sku": "LP-MIN-WHT",
+                "attributes": {
+                    "color": "Pure White"
+                },
+                "unit_price": 45.0,
+                "cost_price": 22.0,
+                "stock": 12
+            },
+            {
+                "sku": "LP-MIN-GRY",
+                "attributes": {
+                    "color": "Space Grey"
+                },
+                "unit_price": 45.0,
+                "cost_price": 22.0,
+                "stock": 8
+            }
+        ]
+    },
+    {
+        "name": "Pro-Grip Yoga Mat",
+        "category": "Sports",
+        "description": "Non-slip high-density yoga mat for maximum cushioning and stability.",
+        "supplier_id": "6980971ff746215690595064",
+        "supplier_name": "Zen Fitness Supply",
+        "reorder_point": 15,
+        "reorder_quantity": 40,
+        "location_id": "loc_epsilon",
+        "status": "active",
+        "image_url": "https://images.unsplash.com/photo-1599447421416-3414500d18a5",
+        "expiry_date": null,
+        "last_restocked": "2026-01-20",
+        "variants": [
+            {
+                "sku": "YM-PRO-6MM-BLU",
+                "attributes": {
+                    "thickness": "6mm",
+                    "color": "Ocean Blue"
+                },
+                "unit_price": 60.0,
+                "cost_price": 35.0,
+                "stock": 25
+            },
+            {
+                "sku": "YM-PRO-6MM-GRN",
+                "attributes": {
+                    "thickness": "6mm",
+                    "color": "Forest Green"
+                },
+                "unit_price": 60.0,
+                "cost_price": 35.0,
+                "stock": 18
+            }
+        ]
+    },
+    {
+        "name": "Glow Facial Serum",
+        "category": "Beauty",
+        "description": "Hydrating serum with Vitamin C and Hyaluronic acid for radiant skin.",
+        "supplier_id": "6980971ff746215690595064",
+        "supplier_name": "PureCare Cosmetics",
+        "reorder_point": 25,
+        "reorder_quantity": 100,
+        "location_id": "loc_zeta",
+        "status": "active",
+        "image_url": "https://images.unsplash.com/photo-1620916566398-39f1143ab7be",
+        "expiry_date": "2027-04-01",
+        "last_restocked": "2026-02-01",
+        "variants": [
+            {
+                "sku": "BT-SRM-30ML",
+                "attributes": {
+                    "size": "30ml"
+                },
+                "unit_price": 35.0,
+                "cost_price": 15.0,
+                "stock": 60
+            },
+            {
+                "sku": "BT-SRM-50ML",
+                "attributes": {
+                    "size": "50ml"
+                },
+                "unit_price": 50.0,
+                "cost_price": 22.0,
+                "stock": 40
+            }
+        ]
+    },
+    {
+        "name": "Executive Hardcover Notebook",
+        "category": "Office Supplies",
+        "description": "Durable hardcover notebook with premium fountain-pen friendly paper.",
+        "supplier_id": "6980971ff746215690595064",
+        "supplier_name": "Stationery Pro",
+        "reorder_point": 50,
+        "reorder_quantity": 200,
+        "location_id": "loc_eta",
+        "status": "active",
+        "image_url": "https://images.unsplash.com/photo-1517842645767-c639042777db",
+        "expiry_date": null,
+        "last_restocked": "2026-01-05",
+        "variants": [
+            {
+                "sku": "NB-EXEC-A5-RULED",
+                "attributes": {
+                    "size": "A5",
+                    "format": "Ruled"
+                },
+                "unit_price": 18.0,
+                "cost_price": 8.0,
+                "stock": 120
+            },
+            {
+                "sku": "NB-EXEC-A5-DOTTED",
+                "attributes": {
+                    "size": "A5",
+                    "format": "Dotted"
+                },
+                "unit_price": 18.0,
+                "cost_price": 8.0,
+                "stock": 85
+            }
+        ]
+    },
+    {
+        "name": "Wireless Noise-Cancelling Headphones",
+        "category": "Electronics",
+        "description": "Over-ear headphones with superior sound quality and 30-hour battery life.",
+        "supplier_id": "6980971ff746215690595064",
+        "supplier_name": "TechGlobal Distribution",
+        "reorder_point": 8,
+        "reorder_quantity": 30,
+        "status": "active",
+        "image_url": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e",
+        "expiry_date": null,
+        "last_restocked": "2026-01-30",
+        "variants": [
+            {
+                "sku": "HP-NC30-BLK",
+                "attributes": {
+                    "color": "Matte Black"
+                },
+                "unit_price": 299.0,
+                "cost_price": 180.0,
+                "stock": 14
+            },
+            {
+                "sku": "HP-NC30-WHT",
+                "attributes": {
+                    "color": "Pearl White"
+                },
+                "unit_price": 299.0,
+                "cost_price": 180.0,
+                "stock": 10
+            }
+        ]
+    },
+    {
+        "name": "Performance Running Shoes",
+        "category": "Clothing",
+        "description": "Lightweight running shoes with advanced shock absorption technology.",
+        "supplier_id": "6980971ff746215690595064",
+        "supplier_name": "Elite Sports Gear",
+        "reorder_point": 12,
+        "reorder_quantity": 60,
+        "location_id": "loc_theta",
+        "status": "active",
+        "image_url": "https://images.unsplash.com/photo-1542291026-7eec264c27ff",
+        "expiry_date": null,
+        "last_restocked": "2026-02-01",
+        "variants": [
+            {
+                "sku": "SH-RUN-42-RED",
+                "attributes": {
+                    "size": "42",
+                    "color": "Neon Red"
+                },
+                "unit_price": 120.0,
+                "cost_price": 65.0,
+                "stock": 15
+            },
+            {
+                "sku": "SH-RUN-44-RED",
+                "attributes": {
+                    "size": "44",
+                    "color": "Neon Red"
+                },
+                "unit_price": 120.0,
+                "cost_price": 65.0,
+                "stock": 12
+            },
+            {
+                "sku": "SH-RUN-43-BLU",
+                "attributes": {
+                    "size": "43",
+                    "color": "Electric Blue"
+                },
+                "unit_price": 120.0,
+                "cost_price": 65.0,
+                "stock": 20
+            }
+        ]
+    },
+    {
+        "name": "Organic Wildflower Honey",
+        "category": "Food & Beverage",
+        "description": "Pure, unpasteurized honey harvested from sustainable wildflower fields.",
+        "supplier_id": "6980971ff746215690595064",
+        "supplier_name": "Nature's Sweetness",
+        "reorder_point": 30,
+        "reorder_quantity": 100,
+        "location_id": "loc_iota",
+        "status": "active",
+        "image_url": "https://images.unsplash.com/photo-1587049352846-4a222e784d38",
+        "expiry_date": "2028-01-01",
+        "last_restocked": "2026-01-25",
+        "variants": [
+            {
+                "sku": "HN-WLD-350G",
+                "attributes": {
+                    "size": "350g"
+                },
+                "unit_price": 12.0,
+                "cost_price": 5.0,
+                "stock": 80
+            },
+            {
+                "sku": "HN-WLD-750G",
+                "attributes": {
+                    "size": "750g"
+                },
+                "unit_price": 22.0,
+                "cost_price": 9.0,
+                "stock": 45
+            }
+        ]
+    }
+]
