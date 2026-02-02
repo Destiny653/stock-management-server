@@ -25,6 +25,7 @@ class Organization(Document):
     country: Optional[str] = None
     status: OrganizationStatus = OrganizationStatus.ACTIVE
     subscription_plan_id: Optional[str] = None
+    subscription_interval: str = "monthly" # monthly, yearly
     max_vendors: int = 10
     max_users: int = 5
     created_at: datetime = Field(default_factory=datetime.utcnow)

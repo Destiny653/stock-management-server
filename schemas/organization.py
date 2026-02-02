@@ -16,6 +16,7 @@ class OrganizationBase(BaseModel):
     logo_url: Optional[str] = None
     status: OrganizationStatus = OrganizationStatus.ACTIVE
     subscription_plan_id: Optional[str] = None
+    subscription_interval: Optional[str] = "monthly"
 
 
 class OrganizationCreate(OrganizationBase):
@@ -32,6 +33,7 @@ class OrganizationUpdate(BaseModel):
     logo_url: Optional[str] = None
     status: Optional[OrganizationStatus] = None
     subscription_plan_id: Optional[str] = None
+    subscription_interval: Optional[str] = None
 
 
 from beanie import PydanticObjectId

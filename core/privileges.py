@@ -36,7 +36,6 @@ class Privilege(str, Enum):
 
 # Helper for role-based default permissions
 ROLE_PERMISSIONS = {
-    "owner": [p.value for p in Privilege],
     "admin": [p.value for p in Privilege],
     "manager": [
         Privilege.PRODUCTS_READ.value,
@@ -63,25 +62,11 @@ ROLE_PERMISSIONS = {
         Privilege.SALES_CREATE.value,
         Privilege.SALES_READ.value,
     ],
-    "staff": [
-        Privilege.PRODUCTS_READ.value,
-        Privilege.STOCK_READ.value,
-        Privilege.SALES_CREATE.value,
-        Privilege.SALES_READ.value,
-        Privilege.PO_READ.value,
-    ],
     "user": [
         Privilege.PRODUCTS_READ.value,
         Privilege.STOCK_READ.value,
         Privilege.SALES_CREATE.value,
         Privilege.SALES_READ.value,
         Privilege.PO_READ.value,
-    ],
-    "viewer": [
-        Privilege.PRODUCTS_READ.value,
-        Privilege.STOCK_READ.value,
-        Privilege.SALES_READ.value,
-        Privilege.PO_READ.value,
-        Privilege.REPORTS_VIEW.value,
     ],
 }

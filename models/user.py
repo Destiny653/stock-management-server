@@ -8,12 +8,9 @@ from core.privileges import Privilege
 
 
 class UserRole(str, Enum):
-    OWNER = "owner"
     ADMIN = "admin"
     MANAGER = "manager"
     VENDOR = "vendor"
-    STAFF = "staff"
-    VIEWER = "viewer"
     USER = "user"
 
 
