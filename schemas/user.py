@@ -26,6 +26,7 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     password: str
     organization_id: Optional[str] = None
+    status: Optional[UserStatus] = None
 
 
 class UserUpdate(BaseModel):
