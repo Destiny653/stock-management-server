@@ -18,6 +18,7 @@ async def read_vendors(
     status: Optional[str] = None,
     payment_status: Optional[str] = None,
     id: Optional[str] = None,
+    user_id: Optional[str] = None,
     search: Optional[str] = None,
     organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
@@ -35,6 +36,8 @@ async def read_vendors(
         query["status"] = status
     if payment_status:
         query["payment_status"] = payment_status
+    if user_id:
+        query["user_id"] = user_id
     if search:
         query["$or"] = [
             {"name": {"$regex": search, "$options": "i"}},
@@ -72,6 +75,25 @@ async def create_vendor(
             )
     vendor = Vendor(**data)
     await vendor.create()
+    return vendor
+
+
+@router.get("/by-user/{user_id}", response_model=VendorResponse)
+async def read_vendor_by_user(
+    user_id: str,
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
+    current_user: User = Depends(deps.get_current_active_user),
+) -> Any:
+    """
+    Get vendor by User ID within an organization.
+    """
+    query = {"user_id": user_id}
+    if organization_id:
+        query["organization_id"] = organization_id
+        
+    vendor = await Vendor.find_one(query)
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found for this user")
     return vendor
 
 
