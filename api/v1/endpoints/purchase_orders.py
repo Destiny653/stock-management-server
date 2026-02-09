@@ -239,8 +239,9 @@ async def receive_purchase_order(
             # Find the variant by SKU
             variant_idx = -1
             if item.sku:
+                item_sku_clean = item.sku.strip().upper()
                 for i, v in enumerate(product.variants):
-                    if v.sku == item.sku:
+                    if v.sku.strip().upper() == item_sku_clean:
                         variant_idx = i
                         break
             
@@ -254,9 +255,12 @@ async def receive_purchase_order(
                 
                 # Update total status
                 total_stock = sum(v.stock for v in product.variants)
+                # Use a consistent default reorder point of 10 if not specified
+                effective_reorder_point = product.reorder_point if product.reorder_point is not None else 10
+                
                 if total_stock == 0:
                     product.status = "out_of_stock"
-                elif total_stock <= (product.reorder_point or 0):
+                elif total_stock <= effective_reorder_point:
                     product.status = "low_stock"
                 else:
                     product.status = "active"

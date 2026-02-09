@@ -215,9 +215,12 @@ async def update_product(
     
     # Recalculate status
     total_stock = sum(v.stock if hasattr(v, "stock") else v.get("stock", 0) for v in product.variants)
+    # Use a consistent default reorder point of 10 if not specified
+    effective_reorder_point = product.reorder_point if product.reorder_point is not None else 10
+    
     if total_stock == 0:
         product.status = "out_of_stock"
-    elif total_stock <= (product.reorder_point or 0):
+    elif total_stock <= effective_reorder_point:
         product.status = "low_stock"
     else:
         product.status = "active"
