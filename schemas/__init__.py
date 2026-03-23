@@ -12,6 +12,12 @@ from schemas.sale import SaleBase, SaleCreate, SaleUpdate, SaleResponse, SaleIte
 from schemas.stock_movement import StockMovementBase, StockMovementCreate, StockMovementResponse
 from schemas.alert import AlertBase, AlertCreate, AlertUpdate, AlertResponse
 from schemas.vendor_payment import VendorPaymentBase, VendorPaymentCreate, VendorPaymentUpdate, VendorPaymentResponse
+from schemas.organization_payment import (
+    OrganizationPaymentBase,
+    OrganizationPaymentCreate,
+    OrganizationPaymentUpdate,
+    OrganizationPaymentResponse,
+)
 
 __all__ = [
     # Token
@@ -79,4 +85,9 @@ __all__ = [
     "VendorPaymentCreate",
     "VendorPaymentUpdate",
     "VendorPaymentResponse",
+    # OrganizationPayment
+    "OrganizationPaymentBase",
+    "OrganizationPaymentCreate",
+    "OrganizationPaymentUpdate",
+    "OrganizationPaymentResponse",
 ]

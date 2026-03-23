@@ -12,6 +12,7 @@ from api.v1.endpoints import (
     stock_movements,
     alerts,
     vendor_payments,
+    organization_payments,
 )
 
 __all__ = [
@@ -27,4 +28,5 @@ __all__ = [
     "stock_movements",
     "alerts",
     "vendor_payments",
+    "organization_payments",
 ]

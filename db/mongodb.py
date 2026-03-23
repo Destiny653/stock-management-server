@@ -1,6 +1,7 @@
 """MongoDB database initialization"""
 from motor.motor_asyncio import AsyncIOMotorClient
 from beanie import init_beanie
+import certifi
 from core.config import settings
 
 # Import all models
@@ -16,11 +17,15 @@ from models.stock_movement import StockMovement
 from models.alert import Alert
 from models.vendor_payment import VendorPayment
 from models.location import Location
+from models.organization_payment import OrganizationPayment
 
 
 async def init_db():
     """Initialize MongoDB connection and Beanie ODM"""
-    client = AsyncIOMotorClient(settings.MONGODB_URL)
+    client = AsyncIOMotorClient(
+        settings.MONGODB_URL,
+        tlsCAFile=certifi.where()
+    )
     await init_beanie(
         database=client[settings.MONGODB_DB_NAME],
         document_models=[
@@ -35,6 +40,7 @@ async def init_db():
             StockMovement,
             Alert,
             VendorPayment,
+            OrganizationPayment,
             Location,
             "models.subscription_plan.SubscriptionPlan",
         ]

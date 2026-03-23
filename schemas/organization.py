@@ -15,6 +15,14 @@ class OrganizationBase(BaseModel):
     website: Optional[str] = None
     logo_url: Optional[str] = None
     status: OrganizationStatus = OrganizationStatus.ACTIVE
+
+    # Frontend-aligned billing fields
+    subscription_plan: Optional[str] = None  # plan code
+    billing_cycle: Optional[str] = "monthly"  # "monthly" | "yearly"
+    trial_ends_at: Optional[datetime] = None
+    storage_capacity_kb: Optional[int] = None
+
+    # Backward-compatible naming (older)
     subscription_plan_id: Optional[str] = None
     subscription_interval: Optional[str] = "monthly"
 
@@ -32,6 +40,12 @@ class OrganizationUpdate(BaseModel):
     website: Optional[str] = None
     logo_url: Optional[str] = None
     status: Optional[OrganizationStatus] = None
+
+    subscription_plan: Optional[str] = None
+    billing_cycle: Optional[str] = None
+    trial_ends_at: Optional[datetime] = None
+    storage_capacity_kb: Optional[int] = None
+
     subscription_plan_id: Optional[str] = None
     subscription_interval: Optional[str] = None
 

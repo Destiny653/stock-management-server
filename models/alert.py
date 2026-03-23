@@ -10,6 +10,7 @@ class AlertType(str, Enum):
     LOW_STOCK = "low_stock"
     OUT_OF_STOCK = "out_of_stock"
     EXPIRING = "expiring"
+    SUBSCRIPTION_EXPIRING = "subscription_expiring"
     PENDING_APPROVAL = "pending_approval"
     PO_RECEIVED = "po_received"
     SYSTEM = "system"

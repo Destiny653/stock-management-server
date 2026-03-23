@@ -8,6 +8,7 @@ from enum import Enum
 
 class OrganizationStatus(str, Enum):
     ACTIVE = "active"
+    PENDING = "pending"
     INACTIVE = "inactive"
     SUSPENDED = "suspended"
 
@@ -24,6 +25,14 @@ class Organization(Document):
     city: Optional[str] = None
     country: Optional[str] = None
     status: OrganizationStatus = OrganizationStatus.ACTIVE
+
+    # Subscription & billing fields (frontend expects these names)
+    subscription_plan: Optional[str] = None  # plan code (e.g. starter/business/enterprise)
+    billing_cycle: str = "monthly"  # "monthly" | "yearly"
+    trial_ends_at: Optional[datetime] = None
+    storage_capacity_kb: Optional[int] = None
+
+    # Backward-compatible fields (older naming)
     subscription_plan_id: Optional[str] = None
     subscription_interval: str = "monthly" # monthly, yearly
     max_vendors: int = 10

@@ -13,6 +13,7 @@ from api.v1.endpoints import (
     stock_movements,
     alerts,
     vendor_payments,
+    organization_payments,
     locations,
     search,
     notifications,
@@ -56,6 +57,9 @@ api_router.include_router(alerts.router, prefix="/alerts", tags=["Alerts"])
 
 # Vendor Payments
 api_router.include_router(vendor_payments.router, prefix="/vendor-payments", tags=["Vendor Payments"])
+
+# Organization Payments
+api_router.include_router(organization_payments.router, prefix="/organization-payments", tags=["Organization Payments"])
 
 # Locations
 api_router.include_router(locations.router, prefix="/locations", tags=["Locations"])

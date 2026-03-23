@@ -1,5 +1,6 @@
 """Organization endpoints"""
 from typing import List, Any, Optional
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from beanie import PydanticObjectId
 from api import deps
@@ -24,6 +25,12 @@ async def read_organizations(
     if id:
         query["_id"] = PydanticObjectId(id)
     organizations = await Organization.find(query).skip(skip).limit(limit).to_list()
+    # Keep frontend-aligned fields in sync with older DB field names.
+    for org in organizations:
+        if org.subscription_plan is None and org.subscription_plan_id:
+            org.subscription_plan = org.subscription_plan_id
+        if org.billing_cycle == "monthly" and org.subscription_interval and org.subscription_interval != "monthly":
+            org.billing_cycle = org.subscription_interval
     return organizations
 
 
@@ -40,7 +47,19 @@ async def create_organization(
             status_code=400,
             detail="An organization with this code already exists",
         )
-    organization = Organization(**organization_in.model_dump())
+    data = organization_in.model_dump()
+
+    # New org registration: start in "pending" until platform-staff approves,
+    # and grant a 30-day free trial by default.
+    data.setdefault("status", "pending")
+    if not data.get("trial_ends_at"):
+        data["trial_ends_at"] = datetime.utcnow() + timedelta(days=30)
+    # Normalize newer -> backward-compatible fields.
+    if data.get("subscription_plan") and not data.get("subscription_plan_id"):
+        data["subscription_plan_id"] = data["subscription_plan"]
+    if data.get("billing_cycle") and not data.get("subscription_interval"):
+        data["subscription_interval"] = data["billing_cycle"]
+    organization = Organization(**data)
     await organization.create()
     return organization
 
@@ -63,6 +82,10 @@ async def read_organization(
     organization = await Organization.get(organization_id)
     if not organization:
         raise HTTPException(status_code=404, detail="Organization not found")
+    if organization.subscription_plan is None and organization.subscription_plan_id:
+        organization.subscription_plan = organization.subscription_plan_id
+    if organization.billing_cycle == "monthly" and organization.subscription_interval and organization.subscription_interval != "monthly":
+        organization.billing_cycle = organization.subscription_interval
     return organization
 
 
@@ -80,6 +103,13 @@ async def update_organization(
         raise HTTPException(status_code=404, detail="Organization not found")
     
     update_data = organization_in.model_dump(exclude_unset=True)
+
+    # Map frontend billing fields -> backward-compatible DB fields.
+    if update_data.get("subscription_plan") and not update_data.get("subscription_plan_id"):
+        update_data["subscription_plan_id"] = update_data["subscription_plan"]
+    if update_data.get("billing_cycle") and not update_data.get("subscription_interval"):
+        update_data["subscription_interval"] = update_data["billing_cycle"]
+
     await organization.update({"$set": update_data})
     await organization.save()
     return organization
