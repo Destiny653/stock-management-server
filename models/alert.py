@@ -12,6 +12,11 @@ class AlertType(str, Enum):
     EXPIRING = "expiring"
     SUBSCRIPTION_EXPIRING = "subscription_expiring"
     PENDING_APPROVAL = "pending_approval"
+    ORG_APPROVED = "org_approved"
+    TRIAL_EXTENDED = "trial_extended"
+    STORAGE_QUOTA_CHANGED = "storage_quota_changed"
+    STORAGE_WARNING = "storage_warning"
+    STORAGE_EXCEEDED = "storage_exceeded"
     PO_RECEIVED = "po_received"
     SYSTEM = "system"
 

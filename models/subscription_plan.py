@@ -9,10 +9,12 @@ class SubscriptionPlan(Document):
     description: Optional[str] = None
     price_monthly: float
     price_yearly: float
+    currency: str = "XAF"
     features: List[str] = []
     max_vendors: int
     max_users: int
     max_products: int
+    max_locations: int = 10
     is_active: bool = True
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

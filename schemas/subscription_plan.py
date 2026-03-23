@@ -9,10 +9,12 @@ class SubscriptionPlanBase(BaseModel):
     description: Optional[str] = None
     price_monthly: float
     price_yearly: float
+    currency: str = "XAF"
     features: List[str] = []
     max_vendors: int
     max_users: int
     max_products: int
+    max_locations: int = 10
     is_active: bool = True
 
 class SubscriptionPlanCreate(SubscriptionPlanBase):
@@ -24,10 +26,12 @@ class SubscriptionPlanUpdate(BaseModel):
     description: Optional[str] = None
     price_monthly: Optional[float] = None
     price_yearly: Optional[float] = None
+    currency: Optional[str] = None
     features: Optional[List[str]] = None
     max_vendors: Optional[int] = None
     max_users: Optional[int] = None
     max_products: Optional[int] = None
+    max_locations: Optional[int] = None
     is_active: Optional[bool] = None
 
 class SubscriptionPlanResponse(SubscriptionPlanBase):

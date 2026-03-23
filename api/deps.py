@@ -7,7 +7,7 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError
 from pydantic import ValidationError
 from core.config import settings
-from models.user import User
+from models.user import User, UserRole
 from schemas.token import TokenPayload
 from models.organization import Organization, OrganizationStatus
 from models.organization_payment import OrganizationPayment
@@ -64,8 +64,7 @@ async def get_current_active_superuser(
     current_user: User = Depends(get_current_user),
 ) -> User:
     """Get current active superuser (platform-staff with admin role)"""
-    # Platform staff can manage the entire platform
-    if current_user.user_type != "platform-staff":
+    if current_user.user_type != "platform-staff" or current_user.role != UserRole.ADMIN:
         raise HTTPException(
             status_code=400, detail="The user doesn't have enough privileges"
         )

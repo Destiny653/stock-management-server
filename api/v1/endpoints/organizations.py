@@ -1,14 +1,64 @@
 """Organization endpoints"""
-from typing import List, Any, Optional
+from typing import List, Any, Optional, Dict
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from beanie import PydanticObjectId
+from bson import BSON
 from api import deps
 from models.user import User
-from models.organization import Organization
+from models.organization import Organization, OrganizationStatus
+from models.product import Product
+from models.supplier import Supplier
+from models.vendor import Vendor
+from models.warehouse import Warehouse
+from models.purchase_order import PurchaseOrder
+from models.sale import Sale
+from models.stock_movement import StockMovement
+from models.alert import Alert
+from models.vendor_payment import VendorPayment
+from models.organization_payment import OrganizationPayment
 from schemas.organization import OrganizationCreate, OrganizationUpdate, OrganizationResponse
+from services.subscription_notifications import (
+    create_org_approved_notification,
+    create_trial_extended_notification,
+    create_storage_capacity_changed_notification,
+)
 
 router = APIRouter()
+
+ORG_SCOPED_MODELS = [
+    User,
+    Product,
+    Supplier,
+    Vendor,
+    Warehouse,
+    PurchaseOrder,
+    Sale,
+    StockMovement,
+    Alert,
+    VendorPayment,
+    OrganizationPayment,
+]
+
+
+async def _estimate_org_storage_usage_kb(organization_id: str) -> Dict[str, Any]:
+    usage_by_collection: Dict[str, int] = {}
+    total_bytes = 0
+
+    for model in ORG_SCOPED_MODELS:
+        collection = model.get_motor_collection()
+        docs = await collection.find({"organization_id": organization_id}).to_list(length=None)
+        collection_bytes = 0
+        for doc in docs:
+            collection_bytes += len(BSON.encode(doc))
+        usage_by_collection[model.get_settings().name] = collection_bytes
+        total_bytes += collection_bytes
+
+    return {
+        "total_bytes": total_bytes,
+        "total_kb": round(total_bytes / 1024, 2),
+        "by_collection_bytes": usage_by_collection,
+    }
 
 
 @router.get("/", response_model=List[OrganizationResponse])
@@ -113,6 +163,155 @@ async def update_organization(
     await organization.update({"$set": update_data})
     await organization.save()
     return organization
+
+
+@router.post("/{organization_id}/approve", response_model=OrganizationResponse)
+async def approve_organization(
+    organization_id: str,
+    current_user: User = Depends(deps.get_current_active_superuser),
+) -> Any:
+    """
+    Approve an organization so it can start using paid features/transactions (platform admin only).
+    """
+    organization = await Organization.get(organization_id)
+    if not organization:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    organization.status = OrganizationStatus.ACTIVE
+    organization.updated_at = datetime.utcnow()
+    await organization.save()
+
+    await create_org_approved_notification(
+        organization=organization,
+        action_url=f"Dashboard",
+    )
+
+    return organization
+
+
+@router.post("/{organization_id}/extend-trial", response_model=OrganizationResponse)
+async def extend_trial(
+    organization_id: str,
+    days: int = 30,
+    current_user: User = Depends(deps.get_current_active_superuser),
+) -> Any:
+    """
+    Extend an organization's free trial by N days (platform admin only).
+    """
+    if days <= 0 or days > 365:
+        raise HTTPException(status_code=400, detail="days must be between 1 and 365")
+
+    organization = await Organization.get(organization_id)
+    if not organization:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    base = organization.trial_ends_at or datetime.utcnow()
+    if base < datetime.utcnow():
+        base = datetime.utcnow()
+    organization.trial_ends_at = base + timedelta(days=days)
+    organization.updated_at = datetime.utcnow()
+    await organization.save()
+
+    await create_trial_extended_notification(
+        organization=organization,
+        new_trial_end=organization.trial_ends_at,
+        days_added=days,
+        action_url="Dashboard",
+    )
+    return organization
+
+
+@router.put("/{organization_id}/storage-capacity", response_model=OrganizationResponse)
+async def set_storage_capacity(
+    organization_id: str,
+    storage_capacity_kb: int,
+    current_user: User = Depends(deps.get_current_active_superuser),
+) -> Any:
+    """
+    Update organization storage capacity/quota in KB (platform admin only).
+    """
+    if storage_capacity_kb <= 0:
+        raise HTTPException(status_code=400, detail="storage_capacity_kb must be > 0")
+
+    organization = await Organization.get(organization_id)
+    if not organization:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    organization.storage_capacity_kb = storage_capacity_kb
+    organization.updated_at = datetime.utcnow()
+    await organization.save()
+
+    await create_storage_capacity_changed_notification(
+        organization=organization,
+        new_capacity_kb=storage_capacity_kb,
+        action_url="Dashboard",
+    )
+
+    return organization
+
+
+@router.get("/{organization_id}/storage-summary", response_model=dict)
+async def get_organization_storage_summary(
+    organization_id: str,
+    current_user: User = Depends(deps.get_current_active_superuser),
+) -> Any:
+    """
+    Get storage usage summary for one organization (platform admin only).
+    """
+    organization = await Organization.get(organization_id)
+    if not organization:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    usage = await _estimate_org_storage_usage_kb(organization_id)
+    capacity_kb = organization.storage_capacity_kb or 0
+    used_kb = usage["total_kb"]
+    usage_percent = round((used_kb / capacity_kb) * 100, 2) if capacity_kb > 0 else None
+
+    return {
+        "organization_id": organization_id,
+        "organization_name": organization.name,
+        "capacity_kb": capacity_kb,
+        "used_kb": used_kb,
+        "usage_percent": usage_percent,
+        "by_collection_bytes": usage["by_collection_bytes"],
+    }
+
+
+@router.get("/all/storage/overview", response_model=dict)
+async def get_storage_overview(
+    current_user: User = Depends(deps.get_current_active_superuser),
+) -> Any:
+    """
+    Get platform storage overview and per-organization usage (platform admin only).
+    """
+    organizations = await Organization.find({}).to_list()
+    org_summaries = []
+    total_used_kb = 0.0
+    total_capacity_kb = 0
+
+    for org in organizations:
+        usage = await _estimate_org_storage_usage_kb(str(org.id))
+        used_kb = usage["total_kb"]
+        capacity_kb = org.storage_capacity_kb or 0
+        total_used_kb += used_kb
+        total_capacity_kb += capacity_kb
+        org_summaries.append(
+            {
+                "organization_id": str(org.id),
+                "organization_name": org.name,
+                "used_kb": used_kb,
+                "capacity_kb": capacity_kb,
+                "usage_percent": round((used_kb / capacity_kb) * 100, 2) if capacity_kb > 0 else None,
+            }
+        )
+
+    return {
+        "total_organizations": len(organizations),
+        "total_used_kb": round(total_used_kb, 2),
+        "total_capacity_kb": total_capacity_kb,
+        "overall_usage_percent": round((total_used_kb / total_capacity_kb) * 100, 2) if total_capacity_kb > 0 else None,
+        "organizations": org_summaries,
+    }
 
 
 @router.delete("/{organization_id}", response_model=OrganizationResponse)
