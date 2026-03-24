@@ -46,7 +46,8 @@ async def _estimate_org_storage_usage_kb(organization_id: str) -> Dict[str, Any]
     total_bytes = 0
 
     for model in ORG_SCOPED_MODELS:
-        collection = model.get_motor_collection()
+        # Beanie models have get_pymongo_collection() to access the motor collection
+        collection = model.get_pymongo_collection()
         docs = await collection.find({"organization_id": organization_id}).to_list(length=None)
         collection_bytes = 0
         for doc in docs:
@@ -311,6 +312,41 @@ async def get_storage_overview(
         "total_capacity_kb": total_capacity_kb,
         "overall_usage_percent": round((total_used_kb / total_capacity_kb) * 100, 2) if total_capacity_kb > 0 else None,
         "organizations": org_summaries,
+    }
+
+
+
+@router.get("/all/storage/db-stats", response_model=dict)
+async def get_database_stats(
+    current_user: User = Depends(deps.get_current_active_superuser),
+) -> Any:
+    """
+    Get full MongoDB database storage statistics (platform admin only).
+    Returns the actual database size, storage allocation, index sizes, etc.
+    """
+    # Access the underlying motor database via any Beanie model's collection
+    db = Organization.get_motor_collection().database
+    stats = await db.command("dbStats")
+
+    # Convert bytes to KB for consistency
+    data_size_kb = round(stats.get("dataSize", 0) / 1024, 2)
+    storage_size_kb = round(stats.get("storageSize", 0) / 1024, 2)
+    index_size_kb = round(stats.get("indexSize", 0) / 1024, 2)
+    total_size_kb = round(stats.get("totalSize", 0) / 1024, 2)
+    fs_used_kb = round(stats.get("fsUsedSize", 0) / 1024, 2)
+    fs_total_kb = round(stats.get("fsTotalSize", 0) / 1024, 2)
+
+    return {
+        "db_name": stats.get("db", ""),
+        "collections": stats.get("collections", 0),
+        "objects": stats.get("objects", 0),
+        "data_size_kb": data_size_kb,
+        "storage_size_kb": storage_size_kb,
+        "index_size_kb": index_size_kb,
+        "total_size_kb": total_size_kb,
+        "fs_used_size_kb": fs_used_kb,
+        "fs_total_size_kb": fs_total_kb,
+        "fs_available_kb": round((stats.get("fsTotalSize", 0) - stats.get("fsUsedSize", 0)) / 1024, 2),
     }
 
 
