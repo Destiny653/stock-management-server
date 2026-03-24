@@ -10,3 +10,4 @@ passlib[bcrypt]==1.7.4
 fastapi-mail==1.4.1
 email-validator==2.1.0.post1
 python-dotenv==1.0.1
+certifi>=2024.0.0
