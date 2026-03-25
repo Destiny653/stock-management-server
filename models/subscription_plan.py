@@ -15,6 +15,8 @@ class SubscriptionPlan(Document):
     max_users: int
     max_products: int
     max_locations: int = 10
+    storage_capacity_kb: int = 0
+    is_popular: bool = False
     is_active: bool = True
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

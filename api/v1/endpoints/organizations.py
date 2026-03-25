@@ -3,7 +3,7 @@ from typing import List, Any, Optional, Dict
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from beanie import PydanticObjectId
-from bson import BSON
+from bson import BSON, ObjectId as BsonObjectId
 from api import deps
 from models.user import User
 from models.organization import Organization, OrganizationStatus
@@ -123,6 +123,8 @@ async def read_organization(
     """
     Get organization by ID.
     """
+    if not BsonObjectId.is_valid(organization_id):
+        raise HTTPException(status_code=400, detail="Invalid organization ID format")
     # Platform-staff can access any organization, business-staff must belong to this org
     if current_user.user_type != "platform-staff" and current_user.organization_id != organization_id:
         raise HTTPException(
@@ -259,6 +261,8 @@ async def get_organization_storage_summary(
     """
     Get storage usage summary for one organization (platform admin only).
     """
+    if not BsonObjectId.is_valid(organization_id):
+        raise HTTPException(status_code=400, detail="Invalid organization ID format")
     organization = await Organization.get(organization_id)
     if not organization:
         raise HTTPException(status_code=404, detail="Organization not found")
@@ -325,7 +329,7 @@ async def get_database_stats(
     Returns the actual database size, storage allocation, index sizes, etc.
     """
     # Access the underlying motor database via any Beanie model's collection
-    db = Organization.get_motor_collection().database
+    db = Organization.get_pymongo_collection().database
     stats = await db.command("dbStats")
 
     # Convert bytes to KB for consistency

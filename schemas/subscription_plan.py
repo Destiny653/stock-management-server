@@ -15,6 +15,8 @@ class SubscriptionPlanBase(BaseModel):
     max_users: int
     max_products: int
     max_locations: int = 10
+    storage_capacity_kb: int = 0
+    is_popular: bool = False
     is_active: bool = True
 
 class SubscriptionPlanCreate(SubscriptionPlanBase):
@@ -32,6 +34,8 @@ class SubscriptionPlanUpdate(BaseModel):
     max_users: Optional[int] = None
     max_products: Optional[int] = None
     max_locations: Optional[int] = None
+    storage_capacity_kb: Optional[int] = None
+    is_popular: Optional[bool] = None
     is_active: Optional[bool] = None
 
 class SubscriptionPlanResponse(SubscriptionPlanBase):
