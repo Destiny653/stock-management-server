@@ -7,6 +7,7 @@ from beanie import PydanticObjectId
 from api import deps
 from models.user import User
 from models.product import Product
+from models.alert import Alert, AlertType, AlertPriority
 from schemas.product import ProductCreate, ProductUpdate, ProductResponse
 
 router = APIRouter()
@@ -215,13 +216,38 @@ async def update_product(
     
     # Recalculate status
     total_stock = sum(v.stock if hasattr(v, "stock") else v.get("stock", 0) for v in product.variants)
-    # Use a consistent default reorder point of 10 if not specified
     effective_reorder_point = product.reorder_point if product.reorder_point is not None else 10
-    
+    product_id_str = str(product.id)
+    org_id = product.organization_id
+
     if total_stock == 0:
         product.status = "out_of_stock"
+        existing = await Alert.find_one({
+            "organization_id": org_id, "product_id": product_id_str,
+            "type": AlertType.OUT_OF_STOCK, "is_dismissed": False,
+        })
+        if not existing:
+            await Alert(
+                organization_id=org_id, type=AlertType.OUT_OF_STOCK,
+                priority=AlertPriority.CRITICAL,
+                title=f"Out of Stock: {product.name}",
+                message=f"{product.name} has run out of stock.",
+                product_id=product_id_str, action_url="/Inventory",
+            ).create()
     elif total_stock <= effective_reorder_point:
         product.status = "low_stock"
+        existing = await Alert.find_one({
+            "organization_id": org_id, "product_id": product_id_str,
+            "type": AlertType.LOW_STOCK, "is_dismissed": False,
+        })
+        if not existing:
+            await Alert(
+                organization_id=org_id, type=AlertType.LOW_STOCK,
+                priority=AlertPriority.HIGH,
+                title=f"Low Stock: {product.name}",
+                message=f"{product.name} is at reorder point ({effective_reorder_point} units). Current stock: {total_stock}.",
+                product_id=product_id_str, action_url="/Inventory",
+            ).create()
     else:
         product.status = "active"
         
@@ -253,6 +279,36 @@ async def delete_product(
         raise HTTPException(status_code=404, detail="Product not found")
     await product.delete()
     return product
+
+
+@router.get("/aging/", response_model=List[ProductResponse])
+async def get_aging_products(
+    days_threshold: int = Query(default=30, description="Products not restocked in this many days"),
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
+    current_user: User = Depends(deps.get_current_active_user),
+) -> Any:
+    """
+    Get aging inventory: products not restocked in `days_threshold` days (or never restocked),
+    sorted oldest-first. Useful for stock session / FIFO management.
+    """
+    from datetime import timedelta, timezone
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days_threshold)
+    query: dict = {}
+    if organization_id:
+        query["organization_id"] = organization_id
+    all_products = await Product.find(query).to_list()
+    aging = [
+        p for p in all_products
+        if p.last_restocked is None or datetime(
+            p.last_restocked.year, p.last_restocked.month,
+            p.last_restocked.day, tzinfo=timezone.utc
+        ) < cutoff
+    ]
+    aging.sort(key=lambda p: (
+        datetime(p.last_restocked.year, p.last_restocked.month, p.last_restocked.day, tzinfo=timezone.utc)
+        if p.last_restocked else datetime.min.replace(tzinfo=timezone.utc)
+    ))
+    return aging
 
 
 @router.get("/low-stock/", response_model=List[ProductResponse])

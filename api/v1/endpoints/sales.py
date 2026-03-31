@@ -9,6 +9,8 @@ from models.sale import Sale, SaleItem
 from models.product import Product
 from models.stock_movement import StockMovement, MovementType
 from schemas.sale import SaleCreate, SaleUpdate, SaleResponse
+from services.notification import send_low_stock_alert
+from services.notification_helpers import get_org_notification_recipients
 
 router = APIRouter()
 
@@ -114,6 +116,15 @@ async def create_sale(
                 product.status = "out_of_stock"
             elif total_stock <= (product.reorder_point or 0):
                 product.status = "low_stock"
+                # Trigger low stock alert
+                recipients = await get_org_notification_recipients(data["organization_id"])
+                for recipient in recipients:
+                    await send_low_stock_alert(
+                        user=recipient,
+                        product_name=item["product_name"],
+                        current_stock=total_stock,
+                        reorder_point=product.reorder_point or 0
+                    )
             else:
                 product.status = "active"
 

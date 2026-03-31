@@ -28,6 +28,7 @@ class OrganizationPaymentBase(BaseModel):
     next_billing_date: Optional[datetime] = None
 
     notes: Optional[str] = None
+    proof_screenshot_url: Optional[str] = None
 
 
 class OrganizationPaymentCreate(OrganizationPaymentBase):
@@ -53,6 +54,7 @@ class OrganizationPaymentUpdate(BaseModel):
     next_billing_date: Optional[datetime] = None
 
     notes: Optional[str] = None
+    proof_screenshot_url: Optional[str] = None
 
 
 class OrganizationPaymentResponse(OrganizationPaymentBase):

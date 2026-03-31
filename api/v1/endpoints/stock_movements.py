@@ -8,6 +8,9 @@ from models.stock_movement import StockMovement
 from models.product import Product
 from schemas.stock_movement import StockMovementCreate, StockMovementResponse
 from datetime import datetime
+from services.notification import send_low_stock_alert
+from services.notification_helpers import get_org_notification_recipients
+from models.alert import Alert, AlertType, AlertPriority
 
 router = APIRouter()
 
@@ -99,11 +102,66 @@ async def create_stock_movement(
     product.updated_at = datetime.utcnow()
     
     # Update status based on total quantity
+    org_id = data["organization_id"]
     total_stock = sum(v.stock for v in product.variants)
+    product_id_str = str(product.id)
+
     if total_stock == 0:
         product.status = "out_of_stock"
+        # Create in-app critical alert (deduped)
+        existing = await Alert.find_one({
+            "organization_id": org_id,
+            "product_id": product_id_str,
+            "type": AlertType.OUT_OF_STOCK,
+            "is_dismissed": False,
+        })
+        if not existing:
+            await Alert(
+                organization_id=org_id,
+                type=AlertType.OUT_OF_STOCK,
+                priority=AlertPriority.CRITICAL,
+                title=f"Out of Stock: {product.name}",
+                message=f"{product.name} has run out of stock. Reorder quantity: {product.reorder_quantity or 'N/A'}.",
+                product_id=product_id_str,
+                action_url=f"/Inventory",
+            ).create()
+        # Email admins
+        recipients = await get_org_notification_recipients(org_id)
+        for recipient in recipients:
+            await send_low_stock_alert(
+                user=recipient,
+                product_name=product.name,
+                current_stock=total_stock,
+                reorder_point=product.reorder_point or 0
+            )
     elif total_stock <= (product.reorder_point or 0):
         product.status = "low_stock"
+        # Create in-app high alert (deduped)
+        existing = await Alert.find_one({
+            "organization_id": org_id,
+            "product_id": product_id_str,
+            "type": AlertType.LOW_STOCK,
+            "is_dismissed": False,
+        })
+        if not existing:
+            await Alert(
+                organization_id=org_id,
+                type=AlertType.LOW_STOCK,
+                priority=AlertPriority.HIGH,
+                title=f"Low Stock: {product.name}",
+                message=f"{product.name} has reached its reorder point ({product.reorder_point} units). Current stock: {total_stock}.",
+                product_id=product_id_str,
+                action_url=f"/Inventory",
+            ).create()
+        # Email admins
+        recipients = await get_org_notification_recipients(org_id)
+        for recipient in recipients:
+            await send_low_stock_alert(
+                user=recipient,
+                product_name=product.name,
+                current_stock=total_stock,
+                reorder_point=product.reorder_point or 0
+            )
     else:
         product.status = "active"
 

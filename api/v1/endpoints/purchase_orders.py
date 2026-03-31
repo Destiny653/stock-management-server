@@ -9,6 +9,8 @@ from models.purchase_order import PurchaseOrder, POItem
 from models.product import Product
 from models.stock_movement import StockMovement, MovementType
 from schemas.purchase_order import PurchaseOrderCreate, PurchaseOrderUpdate, PurchaseOrderResponse
+from services.notification import send_order_update, send_low_stock_alert
+from services.notification_helpers import get_org_notification_recipients
 
 router = APIRouter()
 
@@ -170,6 +172,16 @@ async def approve_purchase_order(
         }
     })
     await purchase_order.save()
+    
+    # Notify admins/managers about the approval
+    recipients = await get_org_notification_recipients(purchase_order.organization_id)
+    for recipient in recipients:
+        await send_order_update(
+            user=recipient,
+            order_number=purchase_order.po_number,
+            status="approved"
+        )
+        
     return purchase_order
 
 
@@ -262,6 +274,15 @@ async def receive_purchase_order(
                     product.status = "out_of_stock"
                 elif total_stock <= effective_reorder_point:
                     product.status = "low_stock"
+                    # Trigger low stock alert
+                    recipients = await get_org_notification_recipients(purchase_order.organization_id)
+                    for recipient in recipients:
+                        await send_low_stock_alert(
+                            user=recipient,
+                            product_name=product.name,
+                            current_stock=total_stock,
+                            reorder_point=effective_reorder_point
+                        )
                 else:
                     product.status = "active"
                 
@@ -290,4 +311,14 @@ async def receive_purchase_order(
         item.quantity_received = item.quantity_ordered
         
     await purchase_order.save()
+    
+    # Notify about receiving the order
+    recipients = await get_org_notification_recipients(purchase_order.organization_id)
+    for recipient in recipients:
+        await send_order_update(
+            user=recipient,
+            order_number=purchase_order.po_number,
+            status="received"
+        )
+        
     return purchase_order
