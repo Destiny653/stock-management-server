@@ -13,6 +13,7 @@ class LocationBase(BaseModel):
     country: str
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    type: str = "office"
 
 class LocationCreate(LocationBase):
     pass

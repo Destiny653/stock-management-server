@@ -13,6 +13,7 @@ class Location(Document):
     country: str
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    type: str = Field(default="office", description="The type of location (store, warehouse, branch, office, other)")
     organization_id: Optional[str] = Field(default=None, description="The organization that owns this location")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
