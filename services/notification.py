@@ -120,3 +120,54 @@ async def send_push_notification_test(user: User):
         </html>
         """
     )
+
+
+async def send_password_reset_email(user: User, token: str):
+    """Send password reset email with bilingual support (EN/FR)"""
+    reset_url = f"http://localhost:3000/auth/reset-password?token={token}"
+    
+    # Simple bilingual content for password reset
+    subject = "Reset your password / Réinitialisez votre mot de passe - StockFlow"
+    
+    html_content = f"""
+    <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+            <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                <h2 style="color: #0d9488; text-align: center;">StockFlow</h2>
+                <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;">
+                
+                <div style="margin-bottom: 30px;">
+                    <p><strong>[English]</strong></p>
+                    <p>Hi {user.full_name or user.username},</p>
+                    <p>You requested to reset your password. Click the button below to continue:</p>
+                    <div style="text-align: center; margin: 30px 0;">
+                        <a href="{reset_url}" style="background-color: #0d9488; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Reset Password</a>
+                    </div>
+                    <p>If you didn't request this, you can safely ignore this email. This link will expire in 1 hour.</p>
+                </div>
+                
+                <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;">
+                
+                <div>
+                    <p><strong>[Français]</strong></p>
+                    <p>Bonjour {user.full_name or user.username},</p>
+                    <p>Vous avez demandé la réinitialisation de votre mot de passe. Cliquez sur le bouton ci-dessous pour continuer :</p>
+                    <div style="text-align: center; margin: 30px 0;">
+                        <a href="{reset_url}" style="background-color: #0d9488; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Réinitialiser le mot de passe</a>
+                    </div>
+                    <p>Si vous n'avez pas demandé cela, vous pouvez ignorer cet e-mail en toute sécurité. Ce lien expirera dans 1 heure.</p>
+                </div>
+                
+                <p style="margin-top: 30px; font-size: 12px; color: #64748b; text-align: center;">
+                    &copy; 2026 StockFlow. All rights reserved. / Tous droits réservés.
+                </p>
+            </div>
+        </body>
+    </html>
+    """
+    
+    await send_email(
+        email_to=[user.email],
+        subject=subject,
+        html_content=html_content
+    )

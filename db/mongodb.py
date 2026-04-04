@@ -18,6 +18,7 @@ from models.alert import Alert
 from models.vendor_payment import VendorPayment
 from models.location import Location
 from models.organization_payment import OrganizationPayment
+from models.auth_request import PasswordResetRequest
 
 
 async def init_db():
@@ -43,5 +44,6 @@ async def init_db():
             OrganizationPayment,
             Location,
             "models.subscription_plan.SubscriptionPlan",
+            PasswordResetRequest,
         ]
     )

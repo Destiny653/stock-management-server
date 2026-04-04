@@ -17,6 +17,10 @@ from schemas.location import LocationCreate
 from models.organization import Organization, OrganizationStatus
 from models.location import Location
 from pydantic import BaseModel
+import secrets
+from schemas.auth import ForgotPasswordRequest, ResetPasswordRequest, ResetStatusResponse
+from models.auth_request import PasswordResetRequest
+from services.notification import send_password_reset_email
 
 router = APIRouter()
 
@@ -250,3 +254,108 @@ async def update_users_me(
         await current_user.save()
     
     return current_user
+
+
+@router.post("/forgot-password")
+async def forgot_password(
+    request: ForgotPasswordRequest,
+) -> Any:
+    """
+    Send password reset email
+    """
+    user = await User.find_one(User.email == request.email)
+    if not user:
+        # We return 200 even if user not found for security (to prevent email enumeration)
+        return {"message": "If an account with that email exists, we sent a reset link."}
+    
+    # Generate token
+    token = secrets.token_urlsafe(32)
+    
+    # Save reset request
+    reset_request = PasswordResetRequest(
+        email=user.email,
+        token=token
+    )
+    await reset_request.create()
+    
+    # Send email
+    try:
+        await send_password_reset_email(user, token)
+    except Exception as e:
+        print(f"Failed to send reset email: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to send reset email"
+        )
+    
+    return {
+        "message": "Password reset email sent",
+        "token": token
+    }
+
+
+@router.post("/reset-password")
+async def reset_password(
+    request: ResetPasswordRequest,
+) -> Any:
+    """
+    Reset password using token
+    """
+    reset_request = await PasswordResetRequest.find_one(
+        PasswordResetRequest.token == request.token,
+        PasswordResetRequest.status == "pending"
+    )
+    
+    if not reset_request:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid or expired reset token"
+        )
+    
+    # Check if expired
+    from datetime import datetime
+    if reset_request.expires_at < datetime.utcnow():
+        reset_request.status = "expired"
+        await reset_request.save()
+        raise HTTPException(
+            status_code=400,
+            detail="Reset token has expired"
+        )
+    
+    user = await User.find_one(User.email == reset_request.email)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Update password
+    user.hashed_password = security.get_password_hash(request.new_password)
+    user.updated_at = datetime.utcnow()
+    await user.save()
+    
+    # Mark request as completed
+    reset_request.status = "completed"
+    await reset_request.save()
+    
+    return {"message": "Password reset successfully"}
+
+
+@router.get("/reset-status/{token}", response_model=ResetStatusResponse)
+async def check_reset_status(
+    token: str,
+) -> Any:
+    """
+    Check status of a password reset request
+    """
+    reset_request = await PasswordResetRequest.find_one(
+        PasswordResetRequest.token == token
+    )
+    
+    if not reset_request:
+        raise HTTPException(
+            status_code=404,
+            detail="Reset request not found"
+        )
+    
+    return {
+        "status": reset_request.status,
+        "message": "Status retrieved successfully"
+    }
