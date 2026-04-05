@@ -166,8 +166,14 @@ async def send_password_reset_email(user: User, token: str):
     </html>
     """
     
-    await send_email(
-        email_to=[user.email],
-        subject=subject,
-        html_content=html_content
-    )
+    print(f"Attempting to send password reset email to: {user.email}")
+    try:
+        await send_email(
+            email_to=[user.email],
+            subject=subject,
+            html_content=html_content
+        )
+        print(f"Successfully sent password reset email to: {user.email}")
+    except Exception as e:
+        print(f"Error in send_email: {e}")
+        raise e
