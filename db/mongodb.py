@@ -28,11 +28,9 @@ async def init_db():
         settings.MONGODB_URL,
         tlsCAFile=certifi.where()
     )
-    # Using get_database ensures be certain versions of Beanie receive a correctly bound object
-    db = client.get_database(settings.MONGODB_DB_NAME)
-    
+
     await init_beanie(
-        database=db,
+        database=client[settings.MONGODB_DB_NAME],
         document_models=[
             Organization,
             User,
