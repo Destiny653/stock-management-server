@@ -115,6 +115,93 @@ async def create_organization(
     return organization
 
 
+@router.get("/all/storage/overview", response_model=Dict[str, Any])
+async def get_storage_overview(
+    current_user: User = Depends(deps.get_current_active_superuser),
+) -> Any:
+    """
+    Get platform storage overview and per-organization usage (platform admin only).
+    """
+    organizations = await Organization.find({}).to_list()
+    org_summaries = []
+    total_used_kb = 0.0
+    total_capacity_kb = 0
+
+    for org in organizations:
+        usage = await _estimate_org_storage_usage_kb(str(org.id))
+        used_kb = float(usage.get("total_kb", 0))
+        capacity_kb = int(org.storage_capacity_kb or 0)
+        total_used_kb += used_kb
+        total_capacity_kb += capacity_kb
+        
+        usage_percent = round((used_kb / capacity_kb) * 100, 2) if capacity_kb > 0 else None
+        
+        org_summaries.append(
+            {
+                "organization_id": str(org.id),
+                "organization_name": org.name,
+                "used_kb": used_kb,
+                "capacity_kb": capacity_kb,
+                "usage_percent": usage_percent,
+            }
+        )
+
+    return {
+        "total_organizations": len(organizations),
+        "total_used_kb": round(total_used_kb, 2),
+        "total_capacity_kb": total_capacity_kb,
+        "overall_usage_percent": round((total_used_kb / total_capacity_kb) * 100, 2) if total_capacity_kb > 0 else None,
+        "organizations": org_summaries,
+    }
+
+
+@router.get("/all/storage/db-stats", response_model=Dict[str, Any])
+async def get_database_stats(
+    current_user: User = Depends(deps.get_current_active_superuser),
+) -> Any:
+    """
+    Get full MongoDB database storage statistics (platform admin only).
+    Returns the actual database size, storage allocation, index sizes, etc.
+    """
+    try:
+        # Access the underlying motor database via any Beanie model's collection
+        db = Organization.get_pymongo_collection().database
+        stats = await db.command("dbStats")
+
+        # Robustly handle fields that might be None or missing in Atlas
+        def get_stat(key: str) -> float:
+            val = stats.get(key)
+            return float(val) if val is not None else 0.0
+
+        data_size_kb = round(get_stat("dataSize") / 1024, 2)
+        storage_size_kb = round(get_stat("storageSize") / 1024, 2)
+        index_size_kb = round(get_stat("indexSize") / 1024, 2)
+        total_size_kb = round(get_stat("totalSize") / 1024, 2)
+        fs_used_kb = round(get_stat("fsUsedSize") / 1024, 2)
+        fs_total_kb = round(get_stat("fsTotalSize") / 1024, 2)
+
+        return {
+            "db_name": stats.get("db", ""),
+            "collections": int(stats.get("collections", 0)),
+            "objects": int(stats.get("objects", 0)),
+            "data_size_kb": data_size_kb,
+            "storage_size_kb": storage_size_kb,
+            "index_size_kb": index_size_kb,
+            "total_size_kb": total_size_kb,
+            "fs_used_size_kb": fs_used_kb,
+            "fs_total_size_kb": fs_total_kb,
+            "fs_available_kb": round(max(0, fs_total_kb - fs_used_kb), 2),
+            "ok": bool(stats.get("ok", 1))
+        }
+    except Exception as e:
+        import logging
+        logging.error(f"Error fetching database stats: {str(e)}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Database statistics could not be retrieved: {str(e)}"
+        )
+
+
 @router.get("/{organization_id}", response_model=OrganizationResponse)
 async def read_organization(
     organization_id: str,
@@ -280,79 +367,6 @@ async def get_organization_storage_summary(
         "usage_percent": usage_percent,
         "by_collection_bytes": usage["by_collection_bytes"],
     }
-
-
-@router.get("/all/storage/overview", response_model=dict)
-async def get_storage_overview(
-    current_user: User = Depends(deps.get_current_active_superuser),
-) -> Any:
-    """
-    Get platform storage overview and per-organization usage (platform admin only).
-    """
-    organizations = await Organization.find({}).to_list()
-    org_summaries = []
-    total_used_kb = 0.0
-    total_capacity_kb = 0
-
-    for org in organizations:
-        usage = await _estimate_org_storage_usage_kb(str(org.id))
-        used_kb = usage["total_kb"]
-        capacity_kb = org.storage_capacity_kb or 0
-        total_used_kb += used_kb
-        total_capacity_kb += capacity_kb
-        org_summaries.append(
-            {
-                "organization_id": str(org.id),
-                "organization_name": org.name,
-                "used_kb": used_kb,
-                "capacity_kb": capacity_kb,
-                "usage_percent": round((used_kb / capacity_kb) * 100, 2) if capacity_kb > 0 else None,
-            }
-        )
-
-    return {
-        "total_organizations": len(organizations),
-        "total_used_kb": round(total_used_kb, 2),
-        "total_capacity_kb": total_capacity_kb,
-        "overall_usage_percent": round((total_used_kb / total_capacity_kb) * 100, 2) if total_capacity_kb > 0 else None,
-        "organizations": org_summaries,
-    }
-
-
-
-@router.get("/all/storage/db-stats", response_model=dict)
-async def get_database_stats(
-    current_user: User = Depends(deps.get_current_active_superuser),
-) -> Any:
-    """
-    Get full MongoDB database storage statistics (platform admin only).
-    Returns the actual database size, storage allocation, index sizes, etc.
-    """
-    # Access the underlying motor database via any Beanie model's collection
-    db = Organization.get_pymongo_collection().database
-    stats = await db.command("dbStats")
-
-    # Convert bytes to KB for consistency
-    data_size_kb = round(stats.get("dataSize", 0) / 1024, 2)
-    storage_size_kb = round(stats.get("storageSize", 0) / 1024, 2)
-    index_size_kb = round(stats.get("indexSize", 0) / 1024, 2)
-    total_size_kb = round(stats.get("totalSize", 0) / 1024, 2)
-    fs_used_kb = round(stats.get("fsUsedSize", 0) / 1024, 2)
-    fs_total_kb = round(stats.get("fsTotalSize", 0) / 1024, 2)
-
-    return {
-        "db_name": stats.get("db", ""),
-        "collections": stats.get("collections", 0),
-        "objects": stats.get("objects", 0),
-        "data_size_kb": data_size_kb,
-        "storage_size_kb": storage_size_kb,
-        "index_size_kb": index_size_kb,
-        "total_size_kb": total_size_kb,
-        "fs_used_size_kb": fs_used_kb,
-        "fs_total_size_kb": fs_total_kb,
-        "fs_available_kb": round((stats.get("fsTotalSize", 0) - stats.get("fsUsedSize", 0)) / 1024, 2),
-    }
-
 
 @router.delete("/{organization_id}", response_model=OrganizationResponse)
 async def delete_organization(

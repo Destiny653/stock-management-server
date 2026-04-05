@@ -1,5 +1,6 @@
 """Notification service for sending various types of notifications"""
 from typing import List
+from core.config import settings
 from services.email import send_email
 from models.user import User
 
@@ -124,7 +125,7 @@ async def send_push_notification_test(user: User):
 
 async def send_password_reset_email(user: User, token: str):
     """Send password reset email with bilingual support (EN/FR)"""
-    reset_url = f"http://localhost:3000/auth/reset-password?token={token}"
+    reset_url = f"{settings.FRONTEND_URL}/reset-password?token={token}"
     
     # Simple bilingual content for password reset
     subject = "Reset your password / Réinitialisez votre mot de passe - StockFlow"

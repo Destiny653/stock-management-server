@@ -266,7 +266,7 @@ async def forgot_password(
     user = await User.find_one(User.email == request.email)
     if not user:
         # We return 200 even if user not found for security (to prevent email enumeration)
-        return {"message": "If an account with that email exists, we sent a reset link."}
+        return {"message": "If an account with that email exists, we will send a reset link."}
     
     # Generate token
     token = secrets.token_urlsafe(32)
