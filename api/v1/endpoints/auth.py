@@ -282,9 +282,11 @@ async def forgot_password(
     try:
         await send_password_reset_email(user, token)
     except Exception as e:
-        # Log the error but still return 200 for security
-        # (prevents email enumeration and avoids exposing internal errors)
         print(f"Failed to send reset email: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to send reset email: {str(e)}"
+        )
     
     return {
         "message": "Password reset email sent",
