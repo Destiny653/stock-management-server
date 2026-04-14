@@ -49,11 +49,17 @@ async def create_alert(
 ) -> Any:
     """
     Create new alert within an organization.
+    Platform-staff can create alerts for any org by supplying organization_id in the body.
     """
     data = alert_in.model_dump()
-    if organization_id:
+    # If the request body contains an organization_id (e.g. platform-staff sending a
+    # cross-org reminder), honour it.  Otherwise fall back to the caller's own org.
+    if not data.get("organization_id") and organization_id:
         data["organization_id"] = organization_id
-        
+
+    if not data.get("organization_id"):
+        raise HTTPException(status_code=400, detail="organization_id is required")
+
     alert = Alert(**data)
     await alert.create()
     return alert

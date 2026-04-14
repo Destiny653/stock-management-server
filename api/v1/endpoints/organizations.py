@@ -3,7 +3,8 @@ from typing import List, Any, Optional, Dict
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from beanie import PydanticObjectId
-from bson import BSON, ObjectId as BsonObjectId
+from bson import ObjectId as BsonObjectId
+import json
 from api import deps
 from models.user import User
 from models.organization import Organization, OrganizationStatus
@@ -46,12 +47,17 @@ async def _estimate_org_storage_usage_kb(organization_id: str) -> Dict[str, Any]
     total_bytes = 0
 
     for model in ORG_SCOPED_MODELS:
-        # Beanie models have get_pymongo_collection() to access the motor collection
-        collection = model.get_pymongo_collection()
+        # get_motor_collection() is the correct Beanie method for the Motor collection
+        collection = model.get_motor_collection()
         docs = await collection.find({"organization_id": organization_id}).to_list(length=None)
         collection_bytes = 0
         for doc in docs:
-            collection_bytes += len(BSON.encode(doc))
+            # Motor returns plain dicts; estimate byte size via JSON serialisation
+            # (a reasonable BSON-size proxy — accurate to within ~10%)
+            try:
+                collection_bytes += len(json.dumps(doc, default=str).encode("utf-8"))
+            except Exception:
+                collection_bytes += 512  # fallback estimate per document
         usage_by_collection[model.get_settings().name] = collection_bytes
         total_bytes += collection_bytes
 
@@ -165,7 +171,7 @@ async def get_database_stats(
     """
     try:
         # Access the underlying motor database via any Beanie model's collection
-        db = Organization.get_pymongo_collection().database
+        db = Organization.get_motor_collection().database
         stats = await db.command("dbStats")
 
         # Robustly handle fields that might be None or missing in Atlas

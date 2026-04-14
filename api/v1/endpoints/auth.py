@@ -278,19 +278,18 @@ async def forgot_password(
     )
     await reset_request.create()
     
-    # Send email
+    # Send email (best-effort: some hosts like Render block SMTP)
+    email_sent = False
     try:
         await send_password_reset_email(user, token)
+        email_sent = True
     except Exception as e:
-        print(f"Failed to send reset email: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to send reset email: {str(e)}"
-        )
+        print(f"Failed to send reset email (non-fatal): {e}")
     
     return {
-        "message": "Password reset email sent",
-        "token": token
+        "message": "Password reset email sent" if email_sent else "Email delivery failed, but you can use the reset link directly.",
+        "token": token,
+        "email_sent": email_sent
     }
 
 
