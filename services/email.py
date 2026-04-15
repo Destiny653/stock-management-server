@@ -1,8 +1,10 @@
-from typing import List
+import logging
+from typing import List, Optional
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
 from pydantic import EmailStr
 from core.config import settings
 
+logger = logging.getLogger(__name__)
 
 def _get_mail_config() -> ConnectionConfig:
     """Build mail config at call-time so env changes are picked up."""
@@ -19,14 +21,30 @@ def _get_mail_config() -> ConnectionConfig:
         VALIDATE_CERTS=settings.VALIDATE_CERTS
     )
 
-
-async def send_email(email_to: List[EmailStr], subject: str, html_content: str):
-    message = MessageSchema(
-        subject=subject,
-        recipients=email_to,
-        body=html_content,
-        subtype=MessageType.html
-    )
-    conf = _get_mail_config()
-    fm = FastMail(conf)
-    await fm.send_message(message)
+async def send_email(
+    email_to: List[EmailStr], 
+    subject: str, 
+    html_content: str, 
+    raise_on_failure: bool = True
+) -> bool:
+    """
+    Send an email using configured SMTP settings.
+    Returns True if successful, False otherwise (if raise_on_failure is False).
+    """
+    try:
+        message = MessageSchema(
+            subject=subject,
+            recipients=email_to,
+            body=html_content,
+            subtype=MessageType.html
+        )
+        conf = _get_mail_config()
+        fm = FastMail(conf)
+        await fm.send_message(message)
+        logger.info(f"Successfully sent email to {email_to}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to send email to {email_to}: {str(e)}", exc_info=True)
+        if raise_on_failure:
+            raise e
+        return False

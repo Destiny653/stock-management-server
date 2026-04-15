@@ -18,7 +18,7 @@ class ProductVariant(BaseModel):
 
 class ProductBase(BaseModel):
     name: str
-    category: ProductCategory = ProductCategory.OTHER
+    category: str = "Other"
     description: Optional[str] = None
     supplier_id: Optional[str] = None
     supplier_name: Optional[str] = None
@@ -38,7 +38,7 @@ class ProductCreate(ProductBase):
 
 class ProductUpdate(BaseModel):
     name: Optional[str] = None
-    category: Optional[ProductCategory] = None
+    category: Optional[str] = None
     description: Optional[str] = None
     supplier_id: Optional[str] = None
     supplier_name: Optional[str] = None

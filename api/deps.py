@@ -66,7 +66,7 @@ async def get_current_active_superuser(
     """Get current active superuser (platform-staff with admin role)"""
     if current_user.user_type != "platform-staff" or current_user.role != UserRole.ADMIN:
         raise HTTPException(
-            status_code=400, detail="The user doesn't have enough privileges"
+            status_code=status.HTTP_403_FORBIDDEN, detail="The user doesn't have enough privileges"
         )
     return current_user
 

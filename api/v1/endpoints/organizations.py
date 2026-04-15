@@ -349,13 +349,25 @@ async def set_storage_capacity(
 @router.get("/{organization_id}/storage-summary", response_model=dict)
 async def get_organization_storage_summary(
     organization_id: str,
-    current_user: User = Depends(deps.get_current_active_superuser),
+    current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
-    Get storage usage summary for one organization (platform admin only).
+    Get storage usage summary for one organization (Platform Admin or Organization Admin).
     """
     if not BsonObjectId.is_valid(organization_id):
         raise HTTPException(status_code=400, detail="Invalid organization ID format")
+    
+    # Platform-staff can access any organization, business-staff must belong to this org and be admin/manager
+    is_platform_staff = current_user.user_type == "platform-staff"
+    is_org_staff = current_user.organization_id == organization_id
+    is_admin = current_user.role in ["admin", "manager"]
+    
+    if not is_platform_staff and not (is_org_staff and is_admin):
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission to access this organization's storage data"
+        )
+        
     organization = await Organization.get(organization_id)
     if not organization:
         raise HTTPException(status_code=404, detail="Organization not found")

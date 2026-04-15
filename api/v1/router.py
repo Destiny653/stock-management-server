@@ -16,8 +16,9 @@ from api.v1.endpoints import (
     organization_payments,
     locations,
     search,
-    notifications,
     subscription_plans,
+    categories,
+    notifications,
 )
 
 api_router = APIRouter()
@@ -72,3 +73,6 @@ api_router.include_router(notifications.router, prefix="/notifications", tags=["
 
 # Subscription Plans
 api_router.include_router(subscription_plans.router, prefix="/subscription-plans", tags=["Subscription Plans"])
+
+# Categories
+api_router.include_router(categories.router, prefix="/categories", tags=["Categories"])

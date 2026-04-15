@@ -20,13 +20,17 @@ from models.location import Location
 from models.organization_payment import OrganizationPayment
 from models.subscription_plan import SubscriptionPlan
 from models.auth_request import PasswordResetRequest
+from models.category import Category
 
 
 async def init_db():
     """Initialize MongoDB connection and Beanie ODM"""
     client = AsyncIOMotorClient(
         settings.MONGODB_URL,
-        tlsCAFile=certifi.where()
+        tlsCAFile=certifi.where(),
+        serverSelectionTimeoutMS=30000,  # 30 seconds
+        connectTimeoutMS=30000,          # 30 seconds
+        socketTimeoutMS=60000            # 60 seconds
     )
 
     await init_beanie(
@@ -47,5 +51,6 @@ async def init_db():
             Location,
             SubscriptionPlan,
             PasswordResetRequest,
+            Category,
         ]
     )

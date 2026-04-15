@@ -54,7 +54,26 @@ async def create_user(
     if existing_username:
         raise HTTPException(status_code=400, detail="Username already taken")
     
-    user_data = user_in.model_dump(exclude={"password"})
+    # Security check: Only platform-staff can create platform-staff users
+    if user_in.user_type == "platform-staff" and current_user.user_type != "platform-staff":
+        raise HTTPException(
+            status_code=403, 
+            detail="Only platform staff can create other platform staff users"
+        )
+    
+    # Security check: Non-platform staff can only create users for their own organization
+    if current_user.user_type != "platform-staff":
+        if user_in.organization_id and user_in.organization_id != current_user.organization_id:
+             raise HTTPException(
+                status_code=403, 
+                detail="You can only create users for your own organization"
+            )
+        # Ensure organization_id is set to user's org if not provided or provided incorrectly
+        user_data = user_in.model_dump(exclude={"password"})
+        user_data["organization_id"] = current_user.organization_id
+    else:
+        user_data = user_in.model_dump(exclude={"password"})
+
     user_data["hashed_password"] = security.get_password_hash(user_in.password)
     user_data["invited_by"] = str(current_user.id)
     user_data["invited_at"] = datetime.utcnow()
@@ -115,6 +134,21 @@ async def update_user(
         raise HTTPException(status_code=404, detail="User not found")
     
     update_data = user_in.model_dump(exclude_unset=True)
+    
+    # Security check: Only platform-staff can change user_type to platform-staff
+    if update_data.get("user_type") == "platform-staff" and current_user.user_type != "platform-staff":
+        raise HTTPException(
+            status_code=403, 
+            detail="Only platform staff can assign the platform staff user type"
+        )
+    
+    # Security check: Non-platform staff cannot change a user's organization
+    if current_user.user_type != "platform-staff" and "organization_id" in update_data:
+        if update_data["organization_id"] != current_user.organization_id:
+            raise HTTPException(
+                status_code=403, 
+                detail="You do not have permission to change a user's organization"
+            )
     
     # Handle password update separately
     if "password" in update_data and update_data["password"]:

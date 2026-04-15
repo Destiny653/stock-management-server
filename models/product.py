@@ -38,7 +38,7 @@ class ProductVariant(BaseModel):
 class Product(Document):
     organization_id: Indexed(str)
     name: Indexed(str)
-    category: ProductCategory = ProductCategory.OTHER
+    category: str = "Other"
     description: Optional[str] = None
     reorder_point: Optional[int] = None
     reorder_quantity: Optional[int] = None
