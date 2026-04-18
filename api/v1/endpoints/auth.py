@@ -263,10 +263,12 @@ async def forgot_password(
     """
     Send password reset email
     """
+    generic_message = "If an account with that email exists, we will send a reset link."
+    
     user = await User.find_one(User.email == request.email)
     if not user:
         # We return 200 even if user not found for security (to prevent email enumeration)
-        return {"message": "If an account with that email exists, we will send a reset link."}
+        return {"message": generic_message}
     
     # Generate token
     token = secrets.token_urlsafe(32)
@@ -278,19 +280,16 @@ async def forgot_password(
     )
     await reset_request.create()
     
-    # Send email (best-effort: some hosts like Render block SMTP)
-    email_sent = False
+    # Send email
     try:
         await send_password_reset_email(user, token)
-        email_sent = True
     except Exception as e:
-        print(f"Failed to send reset email (non-fatal): {e}")
+        # Log the error on the server, but still return 200 to the client to prevent leakage
+        print(f"CRITICAL: Failed to send password reset email to {user.email}: {e}")
+        # Option: you could return a 500 here if you don't care about enumeration protection
+        # but the safest way is to return the same message.
     
-    return {
-        "message": "Password reset email sent" if email_sent else "Email delivery failed, but you can use the reset link directly.",
-        "token": token,
-        "email_sent": email_sent
-    }
+    return {"message": generic_message}
 
 
 @router.post("/reset-password")
