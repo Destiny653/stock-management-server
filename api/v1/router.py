@@ -19,7 +19,7 @@ from api.v1.endpoints import (
     subscription_plans,
     categories,
     notifications,
-    campay_payments,
+    payunit_payments,
 )
 
 api_router = APIRouter()
@@ -78,5 +78,5 @@ api_router.include_router(subscription_plans.router, prefix="/subscription-plans
 # Categories
 api_router.include_router(categories.router, prefix="/categories", tags=["Categories"])
 
-# Campay Payments
-api_router.include_router(campay_payments.router, prefix="/campay", tags=["Campay Payments"])
+# PayUnit Payments
+api_router.include_router(payunit_payments.router, prefix="/payments", tags=["PayUnit Payments"])

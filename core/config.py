@@ -47,10 +47,13 @@ class Settings(BaseSettings):
     USE_CREDENTIALS: bool = True
     VALIDATE_CERTS: bool = True
 
-    # Campay
-    CAMPAY_USERNAME: str = ""
-    CAMPAY_PASSWORD: str = ""
-    CAMPAY_ENVIRONMENT: str = "DEV" # "DEV" or "PROD"
+    # PayUnit
+    PAYUNIT_API_KEY: str = ""
+    PAYUNIT_API_USER: str = ""
+    PAYUNIT_API_PASSWORD: str = ""
+    PAYUNIT_MODE: str = "test"  # "test" or "live"
+    PAYUNIT_RETURN_URL: str = "https://inventory-pi-teal.vercel.app/register/success"
+    PAYUNIT_NOTIFY_URL: str = ""  # Must be HTTPS; set via env var
 
     class Config:
         case_sensitive = True
