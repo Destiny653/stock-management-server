@@ -33,8 +33,8 @@ async def initiate_payunit_collect(
         raise HTTPException(status_code=404, detail="Subscription plan not found")
 
     # 3. Validate gateway
-    if request_in.gateway not in ("CM_MTN", "CM_ORANGE"):
-        raise HTTPException(status_code=400, detail="Invalid gateway. Use CM_MTN or CM_ORANGE.")
+    if request_in.gateway not in ("CM_MTNMOMO", "CM_ORANGE"):
+        raise HTTPException(status_code=400, detail="Invalid gateway. Use CM_MTNMOMO or CM_ORANGE.")
 
     # 4. Generate transaction_id encoding metadata
     # Format: orgId|planCode|billingPeriod__uniqueHash

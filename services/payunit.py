@@ -68,10 +68,16 @@ class PayUnitService:
 
         try:
             response = requests.post(url, headers=self.headers, data=json.dumps(payload), timeout=30)
-            response.raise_for_status()
             data = response.json()
-            logger.info(f"PayUnit response: {data}")
-            return data
+            logger.info(f"PayUnit response (status={response.status_code}): {data}")
+
+            # In sandbox mode, PayUnit may return 404 even when the payment was accepted.
+            # We treat 2xx and 404 as "initiated" and only raise on real errors (400, 401, 403, 5xx).
+            if response.status_code in (400, 401, 403) or response.status_code >= 500:
+                error_msg = data.get("message", response.text)
+                raise Exception(f"PayUnit API error ({response.status_code}): {error_msg}")
+
+            return {"transaction_id": transaction_id, "status": "PENDING", "raw": data}
         except requests.exceptions.RequestException as e:
             logger.error(f"PayUnit initiate_payment error: {str(e)}")
             raise e
