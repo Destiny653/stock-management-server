@@ -41,13 +41,13 @@ class PayUnitService:
         phone_number: str,
         gateway: str,
         transaction_id: str,
-        description: str = "Subscription Payment",
         return_url: str = None,
         notify_url: str = None,
     ) -> dict:
         """
         Initiate a mobile money collection via PayUnit.
-        gateway should be 'CM_MTN' or 'CM_ORANGE'.
+        gateway should be 'CM_MTNMOMO' or 'CM_ORANGE'.
+        phone_number should be 9 digits without country code (e.g. 67xxxxxxx).
         Returns the PayUnit API response dict.
         """
         url = f"{PAYUNIT_BASE_URL}/api/gateway/makepayment"
@@ -59,7 +59,6 @@ class PayUnitService:
             "phone_number": str(phone_number),
             "currency": "XAF",
             "paymentType": "button",
-            "description": description,
             "return_url": return_url or self.return_url,
             "notify_url": notify_url or self.notify_url,
         }

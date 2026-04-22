@@ -41,12 +41,12 @@ async def initiate_payunit_collect(
     metadata_prefix = f"{org.id}|{plan.code}|{request_in.billing_period}"
     transaction_id = PayUnitService.generate_transaction_id(prefix=metadata_prefix)
 
-    # 5. Format phone number
+    # 5. Format phone number — PayUnit expects 9 digits without country code (e.g. 67xxxxxxx)
     phone = str(request_in.phone_number).replace(" ", "")
     if phone.startswith("+"):
         phone = phone[1:]
-    if len(phone) == 9:
-        phone = "237" + phone
+    if phone.startswith("237") and len(phone) == 12:
+        phone = phone[3:]  # Strip country code
 
     # 6. Trigger PayUnit Collection
     try:
@@ -55,7 +55,6 @@ async def initiate_payunit_collect(
             phone_number=phone,
             gateway=request_in.gateway,
             transaction_id=transaction_id,
-            description=request_in.description or f"Subscription for {org.name}",
         )
 
         # We intentionally do NOT save an OrganizationPayment here.
