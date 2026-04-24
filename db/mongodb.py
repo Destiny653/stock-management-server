@@ -21,6 +21,9 @@ from models.organization_payment import OrganizationPayment
 from models.subscription_plan import SubscriptionPlan
 from models.auth_request import PasswordResetRequest
 from models.category import Category
+from models.storefront_config import StorefrontConfig
+from models.product_review import ProductReview
+from models.storefront_order import StorefrontOrder
 
 
 async def init_db():
@@ -52,5 +55,8 @@ async def init_db():
             SubscriptionPlan,
             PasswordResetRequest,
             Category,
+            StorefrontConfig,
+            ProductReview,
+            StorefrontOrder,
         ]
     )

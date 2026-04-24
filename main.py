@@ -53,6 +53,7 @@ async def get_redoc_documentation(current_active_user=Depends(get_swagger_auth))
 
 # Static files (uploads)
 os.makedirs("uploads/products", exist_ok=True)
+os.makedirs("uploads/storefront", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 app.include_router(api_router, prefix=settings.API_V1_STR)

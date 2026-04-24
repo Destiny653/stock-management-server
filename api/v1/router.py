@@ -20,6 +20,8 @@ from api.v1.endpoints import (
     categories,
     notifications,
     payunit_payments,
+    storefront,
+    storefront_admin,
 )
 
 api_router = APIRouter()
@@ -80,3 +82,9 @@ api_router.include_router(categories.router, prefix="/categories", tags=["Catego
 
 # PayUnit Payments
 api_router.include_router(payunit_payments.router, prefix="/payments", tags=["PayUnit Payments"])
+
+# Public Storefront
+api_router.include_router(storefront.router, prefix="/storefront", tags=["Public Storefront"])
+
+# Storefront Admin
+api_router.include_router(storefront_admin.router, prefix="/storefront-admin", tags=["Storefront Admin"])
