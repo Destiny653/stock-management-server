@@ -37,7 +37,7 @@ async def get_storefront_products(
     category: Optional[str] = None,
     min_price: Optional[float] = None,
     max_price: Optional[float] = None,
-    sort: Optional[str] = Query(default="newest", regex="^(newest|price_asc|price_desc|name_asc|name_desc|rating)$"),
+    sort: Optional[str] = Query(default="newest", regex="^(newest|price_asc|price_desc|name_asc|name_desc|rating|best_selling|featured)$"),
     skip: int = 0,
     limit: int = 24,
 ) -> Any:
@@ -84,6 +84,14 @@ async def get_storefront_products(
         products.sort(key=lambda p: p.name.lower(), reverse=True)
     elif sort == "newest":
         products.sort(key=lambda p: p.created_at, reverse=True)
+    elif sort == "featured":
+        # Prioritize featured products
+        featured_ids = config.featured_product_ids or []
+        products.sort(key=lambda p: (0 if str(p.id) in featured_ids else 1, p.created_at), reverse=False)
+    elif sort == "best_selling":
+        # Proxy: sort by a mix of rating and review count (we don't have orders count on product easily)
+        # We'll calculate it on the fly below or just use a placeholder
+        pass # Will handle after computing fields
 
     # Build response with computed fields
     result = []
@@ -108,6 +116,9 @@ async def get_storefront_products(
             "review_count": review_count,
             "created_at": p.created_at.isoformat(),
         })
+
+    if sort == "best_selling":
+        result.sort(key=lambda x: (x["avg_rating"], x["review_count"]), reverse=True)
 
     return {"products": result, "total": len(result)}
 
