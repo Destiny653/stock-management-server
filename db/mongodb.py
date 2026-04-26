@@ -28,12 +28,20 @@ from models.storefront_order import StorefrontOrder
 
 async def init_db():
     """Initialize MongoDB connection and Beanie ODM"""
+    kwargs = {
+        "serverSelectionTimeoutMS": 60000,
+        "connectTimeoutMS": 60000,
+        "socketTimeoutMS": 60000,
+    }
+    
+    if not settings.VALIDATE_CERTS:
+        kwargs["tlsAllowInvalidCertificates"] = True
+    else:
+        kwargs["tlsCAFile"] = certifi.where()
+
     client = AsyncIOMotorClient(
         settings.MONGODB_URL,
-        tlsCAFile=certifi.where(),
-        serverSelectionTimeoutMS=30000,  # 30 seconds
-        connectTimeoutMS=30000,          # 30 seconds
-        socketTimeoutMS=60000            # 60 seconds
+        **kwargs
     )
 
     await init_beanie(
