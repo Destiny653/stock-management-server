@@ -11,6 +11,7 @@ class ProductVariant(BaseModel):
     unit_price: float
     cost_price: float
     stock: int
+    image_url: Optional[str] = None
     barcode: Optional[str] = None
     weight: Optional[float] = None
     dimensions: Optional[str] = None
