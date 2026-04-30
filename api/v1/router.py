@@ -22,9 +22,13 @@ from api.v1.endpoints import (
     payunit_payments,
     storefront,
     storefront_admin,
+    platform,
 )
 
 api_router = APIRouter()
+
+# Platform Settings
+api_router.include_router(platform.router, prefix="/platform", tags=["Platform"])
 
 # Authentication
 api_router.include_router(auth.router, prefix="/auth", tags=["Authentication"])

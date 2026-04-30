@@ -26,6 +26,9 @@ from models.product_review import ProductReview
 from models.storefront_order import StorefrontOrder
 
 
+from models.platform_settings import PlatformSettings
+
+
 async def init_db():
     """Initialize MongoDB connection and Beanie ODM"""
     kwargs = {
@@ -66,5 +69,6 @@ async def init_db():
             StorefrontConfig,
             ProductReview,
             StorefrontOrder,
+            PlatformSettings,
         ]
     )

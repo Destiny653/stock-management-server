@@ -62,6 +62,7 @@ class StorefrontConfig(Document):
     payment_phone_mtn: Optional[str] = None
     payment_phone_orange: Optional[str] = None
     currency: str = "CFAF"
+    accepted_payment_methods: List[str] = Field(default_factory=list)
 
     # Content (bilingual)
     about_text: Optional[str] = None
