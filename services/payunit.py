@@ -58,7 +58,7 @@ class PayUnitService:
             "transaction_id": transaction_id,
             "phone_number": str(phone_number),
             "currency": "XAF",
-            "paymentType": "button",
+            "paymentType": "direct",
             "return_url": return_url or self.return_url,
             "notify_url": notify_url or self.notify_url,
         }

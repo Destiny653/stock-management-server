@@ -32,9 +32,9 @@ async def update_platform_settings(
     settings_in: PlatformSettingsUpdate,
     current_user: User = Depends(get_current_active_user)
 ) -> Any:
-    """Update platform settings (Admin only)."""
-    # For now, let's allow any active user to update if they are the FIRST user or similar
-    # In a real app, this would be highly restricted to platform-staff
+    """Update platform settings (Platform Staff only)."""
+    if current_user.user_type != "platform-staff":
+        raise HTTPException(status_code=403, detail="Not authorized to update platform settings")
     
     settings = await PlatformSettings.find_one()
     if not settings:
