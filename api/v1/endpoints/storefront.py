@@ -37,7 +37,7 @@ async def get_storefront_products(
     category: Optional[str] = None,
     min_price: Optional[float] = None,
     max_price: Optional[float] = None,
-    sort: Optional[str] = Query(default="newest", regex="^(newest|price_asc|price_desc|name_asc|name_desc|rating|best_selling|featured)$"),
+    sort: Optional[str] = Query(default="newest", pattern="^(newest|price_asc|price_desc|name_asc|name_desc|rating|best_selling|featured)$"),
     skip: int = 0,
     limit: int = 24,
 ) -> Any:
@@ -257,9 +257,11 @@ async def submit_review(slug: str, product_id: str, review_in: ReviewCreate) -> 
     return {"message": "Review submitted for moderation", "id": str(review.id)}
 
 
+from services.stripe import StripeService
+
 @router.post("/{slug}/checkout")
 async def submit_order(slug: str, order_in: StorefrontOrderCreate) -> Any:
-    """Submit a storefront order and generate USSD payment string (public)."""
+    """Submit a storefront order and handle payment (USSD or Stripe) (public)."""
     config = await _get_config_by_slug(slug)
 
     if not config.enable_cart:
@@ -284,11 +286,13 @@ async def submit_order(slug: str, order_in: StorefrontOrderCreate) -> Any:
         ))
 
     total = subtotal
+    order_ref = f"SF-{uuid.uuid4().hex[:8].upper()}"
 
-    # Determine payment phone and USSD string
+    # Determine payment logic
     payment_method = order_in.payment_method
     payment_phone = None
     ussd_string = None
+    stripe_client_secret = None
     amount_int = int(total)
 
     if payment_method == "mtn" and config.payment_phone_mtn:
@@ -297,8 +301,27 @@ async def submit_order(slug: str, order_in: StorefrontOrderCreate) -> Any:
     elif payment_method == "orange" and config.payment_phone_orange:
         payment_phone = config.payment_phone_orange
         ussd_string = f"#150*1*{config.payment_phone_orange}*{amount_int}#"
-
-    order_ref = f"SF-{uuid.uuid4().hex[:8].upper()}"
+    elif payment_method == "stripe":
+        # Stripe integration
+        try:
+            # Note: amount for Stripe must be in cents/units. 
+            # For XAF (no decimals), int(total) is correct if total is in XAF.
+            # If USD, it should be int(total * 100).
+            # We assume XAF for now as it's Cameroon context, but let's be safe.
+            currency = config.currency.lower() or "xaf"
+            stripe_amount = amount_int
+            if currency in ["usd", "eur", "gbp"]:
+                stripe_amount = int(total * 100)
+            
+            stripe_res = StripeService.create_payment_intent(
+                amount=stripe_amount,
+                currency=currency,
+                order_id=order_ref,
+                customer_email=order_in.customer_email
+            )
+            stripe_client_secret = stripe_res["client_secret"]
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Stripe setup failed: {str(e)}")
 
     order = StorefrontOrder(
         organization_id=config.organization_id,
@@ -312,6 +335,7 @@ async def submit_order(slug: str, order_in: StorefrontOrderCreate) -> Any:
         payment_method=payment_method,
         payment_phone=payment_phone,
         ussd_string=ussd_string,
+        stripe_client_secret=stripe_client_secret,
         notes=order_in.notes,
     )
     await order.create()
@@ -323,5 +347,7 @@ async def submit_order(slug: str, order_in: StorefrontOrderCreate) -> Any:
         "payment_method": payment_method,
         "payment_phone": payment_phone,
         "ussd_string": ussd_string,
+        "stripe_client_secret": stripe_client_secret,
         "message": "Order placed successfully",
     }
+

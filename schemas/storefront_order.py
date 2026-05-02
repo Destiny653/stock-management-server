@@ -48,7 +48,9 @@ class StorefrontOrderResponse(BaseModel):
     payment_method: str
     payment_phone: Optional[str] = None
     ussd_string: Optional[str] = None
+    stripe_client_secret: Optional[str] = None
     status: str
+
     notes: Optional[str] = None
     created_at: datetime
 

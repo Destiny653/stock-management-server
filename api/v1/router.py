@@ -23,7 +23,9 @@ from api.v1.endpoints import (
     storefront,
     storefront_admin,
     platform,
+    stripe_webhooks,
 )
+
 
 api_router = APIRouter()
 
@@ -87,7 +89,11 @@ api_router.include_router(categories.router, prefix="/categories", tags=["Catego
 # PayUnit Payments
 api_router.include_router(payunit_payments.router, prefix="/payments", tags=["PayUnit Payments"])
 
+# Stripe Webhooks
+api_router.include_router(stripe_webhooks.router, prefix="/stripe-webhooks", tags=["Stripe Webhooks"])
+
 # Public Storefront
+
 api_router.include_router(storefront.router, prefix="/storefront", tags=["Public Storefront"])
 
 # Storefront Admin

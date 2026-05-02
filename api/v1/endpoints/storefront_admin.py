@@ -234,7 +234,7 @@ async def list_storefront_orders(
 @router.put("/orders/{order_id}/status")
 async def update_order_status(
     order_id: str,
-    new_status: str = Query(..., regex="^(pending|confirmed|processing|completed|cancelled)$"),
+    new_status: str = Query(..., pattern="^(pending|confirmed|processing|completed|cancelled)$"),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """Update storefront order status."""

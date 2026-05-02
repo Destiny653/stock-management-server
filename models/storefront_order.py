@@ -11,6 +11,7 @@ class StorefrontOrderStatus(str, Enum):
     CONFIRMED = "confirmed"
     PROCESSING = "processing"
     COMPLETED = "completed"
+    PAID = "paid"
     CANCELLED = "cancelled"
 
 
@@ -34,9 +35,11 @@ class StorefrontOrder(Document):
     items: List[StorefrontOrderItem] = Field(default_factory=list)
     subtotal: float = 0.0
     total: float = 0.0
-    payment_method: str = "mtn"           # "mtn" or "orange"
+    payment_method: str = "mtn"           # "mtn", "orange", or "stripe"
     payment_phone: Optional[str] = None   # org's payment phone used
     ussd_string: Optional[str] = None     # generated USSD
+    stripe_client_secret: Optional[str] = None
+    stripe_payment_intent_id: Optional[str] = None
     status: StorefrontOrderStatus = StorefrontOrderStatus.PENDING
     notes: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
