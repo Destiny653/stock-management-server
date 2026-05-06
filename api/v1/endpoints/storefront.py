@@ -304,20 +304,27 @@ async def submit_order(slug: str, order_in: StorefrontOrderCreate) -> Any:
     elif payment_method == "stripe":
         # Stripe integration
         try:
+            if not config.stripe_charges_enabled or not config.stripe_account_id:
+                raise HTTPException(status_code=400, detail="Storefront is not fully connected to Stripe yet.")
+
             # Note: amount for Stripe must be in cents/units. 
             # For XAF (no decimals), int(total) is correct if total is in XAF.
             # If USD, it should be int(total * 100).
-            # We assume XAF for now as it's Cameroon context, but let's be safe.
             currency = config.currency.lower() or "xaf"
             stripe_amount = amount_int
             if currency in ["usd", "eur", "gbp"]:
                 stripe_amount = int(total * 100)
             
+            # 2% application fee for the platform
+            application_fee = int(stripe_amount * 0.02)
+            
             stripe_res = StripeService.create_payment_intent(
                 amount=stripe_amount,
                 currency=currency,
                 order_id=order_ref,
-                customer_email=order_in.customer_email
+                customer_email=order_in.customer_email,
+                stripe_account=config.stripe_account_id,
+                application_fee_amount=application_fee
             )
             stripe_client_secret = stripe_res["client_secret"]
         except Exception as e:

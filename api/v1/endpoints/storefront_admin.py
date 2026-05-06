@@ -11,6 +11,7 @@ from models.storefront_config import StorefrontConfig, ThemeConfig, HeroSlide, S
 from models.product_review import ProductReview
 from models.storefront_order import StorefrontOrder
 from schemas.storefront_config import StorefrontConfigCreate, StorefrontConfigUpdate
+from services.stripe import StripeService
 
 router = APIRouter()
 
@@ -110,6 +111,64 @@ async def update_storefront_config(
         )
         await config.create()
         return config
+
+
+@router.post("/config/stripe/connect")
+async def connect_stripe_account(
+    return_url: str = Query(..., description="URL to redirect to after onboarding"),
+    refresh_url: str = Query(..., description="URL to redirect to if onboarding fails/expires"),
+    current_user: User = Depends(deps.get_current_active_user),
+) -> Any:
+    """Generate a Stripe Connect onboarding link for the organization."""
+    org_id = current_user.organization_id
+    if not org_id:
+        raise HTTPException(status_code=400, detail="No organization associated with user")
+
+    if current_user.role not in ["admin", "manager"]:
+        raise HTTPException(status_code=403, detail="Only admins/managers can connect Stripe")
+
+    config = await StorefrontConfig.find_one({"organization_id": org_id})
+    if not config:
+        raise HTTPException(status_code=404, detail="Storefront config not found. Please save initial settings first.")
+
+    account_id = config.stripe_account_id
+    if not account_id:
+        try:
+            account_id = StripeService.create_connect_account()
+            config.stripe_account_id = account_id
+            await config.save()
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to create Stripe account: {str(e)}")
+
+    try:
+        link = StripeService.create_account_link(account_id, return_url, refresh_url)
+        return {"url": link, "account_id": account_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate onboarding link: {str(e)}")
+
+
+@router.get("/config/stripe/status")
+async def check_stripe_status(
+    current_user: User = Depends(deps.get_current_active_user),
+) -> Any:
+    """Check the Stripe Connect onboarding status and update config."""
+    org_id = current_user.organization_id
+    if not org_id:
+        raise HTTPException(status_code=400, detail="No organization associated with user")
+
+    config = await StorefrontConfig.find_one({"organization_id": org_id})
+    if not config or not config.stripe_account_id:
+        return {"stripe_charges_enabled": False}
+
+    is_enabled = StripeService.check_account_status(config.stripe_account_id)
+    if is_enabled != config.stripe_charges_enabled:
+        config.stripe_charges_enabled = is_enabled
+        await config.save()
+
+    return {
+        "stripe_account_id": config.stripe_account_id,
+        "stripe_charges_enabled": config.stripe_charges_enabled
+    }
 
 
 @router.post("/config/upload-image")

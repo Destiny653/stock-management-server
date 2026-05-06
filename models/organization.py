@@ -25,6 +25,7 @@ class Organization(Document):
     city: Optional[str] = None
     country: Optional[str] = None
     status: OrganizationStatus = OrganizationStatus.ACTIVE
+    currency: str = "CFAF"
 
     # Subscription & billing fields (frontend expects these names)
     subscription_plan: Optional[str] = None  # plan code (e.g. starter/business/enterprise)

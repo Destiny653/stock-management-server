@@ -15,6 +15,7 @@ class OrganizationBase(BaseModel):
     website: Optional[str] = None
     logo_url: Optional[str] = None
     status: OrganizationStatus = OrganizationStatus.ACTIVE
+    currency: Optional[str] = "CFAF"
 
     # Frontend-aligned billing fields
     subscription_plan: Optional[str] = None  # plan code
@@ -40,6 +41,7 @@ class OrganizationUpdate(BaseModel):
     website: Optional[str] = None
     logo_url: Optional[str] = None
     status: Optional[OrganizationStatus] = None
+    currency: Optional[str] = None
 
     subscription_plan: Optional[str] = None
     billing_cycle: Optional[str] = None

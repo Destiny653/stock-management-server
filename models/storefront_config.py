@@ -63,6 +63,10 @@ class StorefrontConfig(Document):
     payment_phone_orange: Optional[str] = None
     currency: str = "CFAF"
     accepted_payment_methods: List[str] = Field(default_factory=list)
+    
+    # Stripe Connect
+    stripe_account_id: Optional[str] = None
+    stripe_charges_enabled: bool = False
 
     # Content (bilingual)
     about_text: Optional[str] = None
