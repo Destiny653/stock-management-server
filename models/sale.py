@@ -1,5 +1,5 @@
 """Sale model - Sales transactions"""
-from typing import Optional, List
+from typing import Annotated, Optional, List
 from datetime import datetime
 from beanie import Document, Indexed
 from pydantic import Field, BaseModel
@@ -30,8 +30,8 @@ class SaleItem(BaseModel):
 
 
 class Sale(Document):
-    organization_id: Indexed(str)
-    sale_number: Indexed(str, unique=True)
+    organization_id: Annotated[str, Indexed()]
+    sale_number: Annotated[str, Indexed(unique=True)]
     vendor_id: Optional[str] = None
     vendor_name: str
     vendor_email: Optional[str] = None

@@ -1,5 +1,5 @@
 """Organization schemas"""
-from typing import Optional
+from typing import Optional, Dict, Any
 from datetime import datetime
 from pydantic import BaseModel, EmailStr
 from models.organization import OrganizationStatus
@@ -27,6 +27,10 @@ class OrganizationBase(BaseModel):
     subscription_plan_id: Optional[str] = None
     subscription_interval: Optional[str] = "monthly"
 
+    # Account setup wizard
+    setup_completed: Optional[bool] = False
+    setup_answers: Optional[Dict[str, Any]] = None
+
 
 class OrganizationCreate(OrganizationBase):
     pass
@@ -51,11 +55,16 @@ class OrganizationUpdate(BaseModel):
     subscription_plan_id: Optional[str] = None
     subscription_interval: Optional[str] = None
 
+    setup_completed: Optional[bool] = None
+    setup_answers: Optional[Dict[str, Any]] = None
+
 
 from beanie import PydanticObjectId
 
 class OrganizationResponse(OrganizationBase):
     id: PydanticObjectId
+    setup_completed: bool = False
+    setup_answers: Optional[Dict[str, Any]] = None
     created_at: datetime
     updated_at: datetime
 

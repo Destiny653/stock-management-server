@@ -1,5 +1,5 @@
 """StorefrontConfig model – per-organization storefront customization"""
-from typing import Optional, List
+from typing import Annotated, Optional, List
 from datetime import datetime
 from beanie import Document, Indexed
 from pydantic import Field, BaseModel
@@ -39,8 +39,8 @@ class SocialLinks(BaseModel):
 
 
 class StorefrontConfig(Document):
-    organization_id: Indexed(str, unique=True)
-    slug: Indexed(str, unique=True)
+    organization_id: Annotated[str, Indexed(unique=True)]
+    slug: Annotated[str, Indexed(unique=True)]
 
     # Branding
     store_name: str

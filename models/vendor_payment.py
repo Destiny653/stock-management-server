@@ -1,5 +1,5 @@
 """VendorPayment model - Payment tracking for vendors"""
-from typing import Optional
+from typing import Annotated, Optional
 from datetime import datetime, date
 from beanie import Document, Indexed
 from pydantic import Field
@@ -28,8 +28,8 @@ class VPPaymentMethod(str, Enum):
 
 
 class VendorPayment(Document):
-    organization_id: Indexed(str)
-    vendor_id: Indexed(str)
+    organization_id: Annotated[str, Indexed()]
+    vendor_id: Annotated[str, Indexed()]
     vendor_name: Optional[str] = None
     amount: float
     payment_type: VPPaymentType = VPPaymentType.SUBSCRIPTION

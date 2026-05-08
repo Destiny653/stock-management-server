@@ -1,5 +1,5 @@
 """Vendor model - Vendors who sell products"""
-from typing import Optional
+from typing import Optional, Annotated
 from datetime import datetime, date
 from beanie import Document, Indexed
 from pydantic import Field, EmailStr
@@ -27,9 +27,9 @@ class VendorPaymentStatus(str, Enum):
 
 
 class Vendor(Document):
-    organization_id: Indexed(str)
+    organization_id: Annotated[str, Indexed()]
     user_id: Optional[str] = None  # Linked user account (stores contact info: name, email, phone)
-    store_name: Indexed(str)  # Trading/Display name for the vendor's store
+    store_name: Annotated[str, Indexed()]  # Trading/Display name for the vendor's store
     name: Optional[str] = None  # Legal/Business Name
     location_id: Optional[str] = None
     status: VendorStatus = VendorStatus.PENDING

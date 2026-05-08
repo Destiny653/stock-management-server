@@ -1,5 +1,5 @@
 """StorefrontOrder model – orders placed through the public storefront"""
-from typing import Optional, List
+from typing import Optional, List, Annotated
 from datetime import datetime
 from beanie import Document, Indexed
 from pydantic import Field, BaseModel
@@ -27,8 +27,8 @@ class StorefrontOrderItem(BaseModel):
 
 
 class StorefrontOrder(Document):
-    organization_id: Indexed(str)
-    order_ref: Indexed(str, unique=True)
+    organization_id: Annotated[str, Indexed()]
+    order_ref: Annotated[str, Indexed(unique=True)]
     customer_name: str
     customer_email: Optional[str] = None
     customer_phone: str

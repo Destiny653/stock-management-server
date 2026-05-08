@@ -1,5 +1,5 @@
 """Alert model - System notifications"""
-from typing import Optional
+from typing import Annotated, Optional
 from datetime import datetime
 from beanie import Document, Indexed
 from pydantic import Field
@@ -29,7 +29,7 @@ class AlertPriority(str, Enum):
 
 
 class Alert(Document):
-    organization_id: Indexed(str)
+    organization_id: Annotated[str, Indexed()]
     type: AlertType
     priority: AlertPriority = AlertPriority.MEDIUM
     title: str

@@ -2,7 +2,7 @@
 from typing import Optional, List
 from datetime import datetime, date
 from pydantic import BaseModel
-from models.purchase_order import POStatus, POItem
+from models.purchase_order import POStatus, POItem, ShipmentEvent
 
 
 class POItemCreate(BaseModel):
@@ -30,6 +30,10 @@ class PurchaseOrderBase(BaseModel):
     notes: Optional[str] = None
     approved_by: Optional[str] = None
     warehouse: Optional[str] = None
+    tracking_number: Optional[str] = None
+    shipping_method: Optional[str] = None
+    current_location: Optional[str] = None
+    shipment_events: List[dict] = []
 
 
 class PurchaseOrderCreate(PurchaseOrderBase):
@@ -50,6 +54,10 @@ class PurchaseOrderUpdate(BaseModel):
     notes: Optional[str] = None
     approved_by: Optional[str] = None
     warehouse: Optional[str] = None
+    tracking_number: Optional[str] = None
+    shipping_method: Optional[str] = None
+    current_location: Optional[str] = None
+    shipment_events: Optional[List[dict]] = None
 
 
 from beanie import PydanticObjectId

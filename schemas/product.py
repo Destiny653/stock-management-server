@@ -26,6 +26,7 @@ class ProductBase(BaseModel):
     reorder_point: Optional[int] = None
     reorder_quantity: Optional[int] = None
     location_id: Optional[str] = None
+    warehouse_id: Optional[str] = None
     status: ProductStatus = ProductStatus.ACTIVE
     image_url: Optional[str] = None
     expiry_date: Optional[date] = None
@@ -46,6 +47,7 @@ class ProductUpdate(BaseModel):
     reorder_point: Optional[int] = None
     reorder_quantity: Optional[int] = None
     location_id: Optional[str] = None
+    warehouse_id: Optional[str] = None
     status: Optional[ProductStatus] = None
     image_url: Optional[str] = None
     expiry_date: Optional[date] = None

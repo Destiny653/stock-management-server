@@ -1,5 +1,5 @@
 """StockMovement model - Inventory movement tracking"""
-from typing import Optional
+from typing import Annotated, Optional
 from datetime import datetime
 from beanie import Document, Indexed
 from pydantic import Field
@@ -15,8 +15,8 @@ class MovementType(str, Enum):
 
 
 class StockMovement(Document):
-    organization_id: Indexed(str)
-    product_id: Indexed(str)
+    organization_id: Annotated[str, Indexed()]
+    product_id: Annotated[str, Indexed()]
     product_name: Optional[str] = None
     sku: Optional[str] = None
     type: MovementType

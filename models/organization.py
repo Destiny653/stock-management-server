@@ -1,5 +1,5 @@
 """Organization model - Base entity for multi-tenancy"""
-from typing import Optional, List
+from typing import Annotated, Optional, List, Dict, Any
 from datetime import datetime
 from beanie import Document, Indexed
 from pydantic import Field, EmailStr
@@ -14,8 +14,8 @@ class OrganizationStatus(str, Enum):
 
 
 class Organization(Document):
-    name: Indexed(str)
-    code: Indexed(str, unique=True)
+    name: Annotated[str, Indexed()]
+    code: Annotated[str, Indexed(unique=True)]
     description: Optional[str] = None
     location_id: Optional[str] = None
     phone: Optional[str] = None
@@ -38,6 +38,11 @@ class Organization(Document):
     subscription_interval: str = "monthly" # monthly, yearly
     max_vendors: int = 10
     max_users: int = 5
+
+    # Account setup wizard
+    setup_completed: bool = False
+    setup_answers: Optional[Dict[str, Any]] = None  # Questionnaire answers (entity counts)
+
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 

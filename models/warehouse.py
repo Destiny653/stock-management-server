@@ -1,5 +1,5 @@
 """Warehouse model - Storage locations"""
-from typing import Optional
+from typing import Optional, Annotated
 from datetime import datetime
 from beanie import Document, Indexed
 from pydantic import Field
@@ -13,8 +13,8 @@ class WarehouseStatus(str, Enum):
 
 
 class Warehouse(Document):
-    organization_id: Indexed(str)
-    name: Indexed(str)
+    organization_id: Annotated[str, Indexed()]
+    name: Annotated[str, Indexed()]
     code: str
     location_id: Optional[str] = None
     manager: Optional[str] = None

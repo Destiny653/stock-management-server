@@ -1,5 +1,5 @@
 """Product model - Updated with organization_id for multi-tenancy"""
-from typing import Optional, List, Dict
+from typing import Optional, List, Annotated, Dict
 from datetime import datetime, date
 from beanie import Document, Indexed
 from pydantic import Field, BaseModel
@@ -37,13 +37,14 @@ class ProductVariant(BaseModel):
 
 
 class Product(Document):
-    organization_id: Indexed(str)
-    name: Indexed(str)
+    organization_id: Annotated[str, Indexed()]
+    name: Annotated[str, Indexed()]
     category: str = "Other"
     description: Optional[str] = None
     reorder_point: Optional[int] = None
     reorder_quantity: Optional[int] = None
     location_id: Optional[str] = None
+    warehouse_id: Optional[str] = None  # Direct warehouse/store reference
     supplier_id: Optional[str] = None
     supplier_name: Optional[str] = None
     status: ProductStatus = ProductStatus.ACTIVE

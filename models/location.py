@@ -1,11 +1,11 @@
 """Location model for reuse across warehouses, suppliers, etc."""
-from typing import Optional
+from typing import Annotated, Optional
 from datetime import datetime
 from beanie import Document, Indexed
 from pydantic import Field
 
 class Location(Document):
-    name: Indexed(str)  # Friendly name like "New York Warehouse" or "Main Office"
+    name: Annotated[str, Indexed()]  # Friendly name like "New York Warehouse" or "Main Office"
     address: str
     city: str
     state: Optional[str] = None

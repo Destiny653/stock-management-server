@@ -1,5 +1,5 @@
 """Supplier model - Suppliers for purchase orders"""
-from typing import Optional
+from typing import Annotated, Optional
 from datetime import datetime
 from beanie import Document, Indexed
 from pydantic import Field, EmailStr
@@ -21,9 +21,9 @@ class SupplierStatus(str, Enum):
 
 
 class Supplier(Document):
-    organization_id: Indexed(str)
+    organization_id: Annotated[str, Indexed()]
     user_id: Optional[str] = None  # Linked contact person
-    name: Indexed(str)
+    name: Annotated[str, Indexed()]
     location_id: Optional[str] = None
     payment_terms: PaymentTerms = PaymentTerms.NET_30
     lead_time_days: Optional[int] = None

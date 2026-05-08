@@ -49,6 +49,8 @@ async def read_products(
     category: Optional[str] = None,
     status: Optional[str] = None,
     search: Optional[str] = None,
+    location_id: Optional[str] = None,
+    warehouse_id: Optional[str] = None,
     organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
@@ -63,6 +65,10 @@ async def read_products(
         query["category"] = category
     if status:
         query["status"] = status
+    if location_id:
+        query["location_id"] = location_id
+    if warehouse_id:
+        query["warehouse_id"] = warehouse_id
     if search:
         query["$or"] = [
             {"name": {"$regex": search, "$options": "i"}},

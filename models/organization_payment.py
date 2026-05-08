@@ -1,6 +1,6 @@
 """OrganizationPayment model - Payment tracking for subscriptions/addons per organization"""
 
-from typing import Optional
+from typing import Annotated, Optional
 from datetime import datetime
 
 from beanie import Document, Indexed
@@ -33,7 +33,7 @@ class OPaymentMethod(str, Enum):
 
 
 class OrganizationPayment(Document):
-    organization_id: Indexed(str)
+    organization_id: Annotated[str, Indexed()]
     subscription_plan_id: Optional[str] = None
 
     amount: float

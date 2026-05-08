@@ -1,5 +1,5 @@
 """User model - Updated with organization_id for multi-tenancy"""
-from typing import Optional, List, Dict
+from typing import Annotated, Optional, List, Dict
 from datetime import datetime
 from beanie import Document, Indexed
 from pydantic import Field, EmailStr, BaseModel
@@ -45,9 +45,9 @@ class UserPreferences(BaseModel):
 
 
 class User(Document):
-    organization_id: Optional[Indexed(str)] = None
-    email: Indexed(EmailStr, unique=True)
-    username: Indexed(str, unique=True)
+    organization_id: Optional[Annotated[str, Indexed()]] = None
+    email: Annotated[EmailStr, Indexed(unique=True)]
+    username: Annotated[str, Indexed(unique=True)]
     hashed_password: str
     first_name: Optional[str] = None
     last_name: Optional[str] = None

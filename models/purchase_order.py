@@ -1,5 +1,5 @@
 """PurchaseOrder model - Purchase orders from suppliers"""
-from typing import Optional, List
+from typing import Optional, List, Annotated
 from datetime import datetime, date
 from beanie import Document, Indexed
 from pydantic import Field, BaseModel
@@ -16,6 +16,22 @@ class POStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
+class ShippingMethod(str, Enum):
+    AIR = "air"
+    SEA = "sea"
+    ROAD = "road"
+    RAIL = "rail"
+    COURIER = "courier"
+
+
+class ShipmentEvent(BaseModel):
+    """A single tracking event in the shipment journey"""
+    location: str
+    status: str  # e.g. "departed", "in_transit", "customs", "arrived", "delivered"
+    timestamp: datetime
+    notes: Optional[str] = None
+
+
 class POItem(BaseModel):
     """Embedded model for PO line items"""
     product_id: str
@@ -28,8 +44,8 @@ class POItem(BaseModel):
 
 
 class PurchaseOrder(Document):
-    organization_id: Indexed(str)
-    po_number: Indexed(str, unique=True)
+    organization_id: Annotated[str, Indexed()]
+    po_number: Annotated[str, Indexed(unique=True)]
     supplier_id: Optional[str] = None
     supplier_name: str
     status: POStatus = POStatus.DRAFT
@@ -43,6 +59,11 @@ class PurchaseOrder(Document):
     notes: Optional[str] = None
     approved_by: Optional[str] = None
     warehouse: Optional[str] = None
+    # Shipment tracking
+    tracking_number: Optional[str] = None
+    shipping_method: Optional[str] = None
+    current_location: Optional[str] = None
+    shipment_events: List[ShipmentEvent] = []
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 

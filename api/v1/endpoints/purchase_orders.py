@@ -2,10 +2,11 @@
 from typing import List, Any, Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from beanie import PydanticObjectId
 from api import deps
 from models.user import User
-from models.purchase_order import PurchaseOrder, POItem
+from models.purchase_order import PurchaseOrder, POItem, ShipmentEvent
 from models.product import Product
 from models.stock_movement import StockMovement, MovementType
 from schemas.purchase_order import PurchaseOrderCreate, PurchaseOrderUpdate, PurchaseOrderResponse
@@ -321,4 +322,46 @@ async def receive_purchase_order(
             status="received"
         )
         
+    return purchase_order
+
+
+class TrackingEventCreate(BaseModel):
+    """Request body for adding a tracking event"""
+    location: str
+    status: str
+    notes: Optional[str] = None
+
+
+
+@router.post("/{po_id}/tracking-event", response_model=PurchaseOrderResponse)
+async def add_tracking_event(
+    po_id: str,
+    event_in: TrackingEventCreate,
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
+    current_user: User = Depends(deps.get_current_active_user),
+) -> Any:
+    """
+    Add a shipment tracking event to a purchase order.
+    Automatically updates current_location to the event's location.
+    """
+    query = {"_id": PydanticObjectId(po_id)}
+    if organization_id:
+        query["organization_id"] = organization_id
+
+    purchase_order = await PurchaseOrder.find_one(query)
+    if not purchase_order:
+        raise HTTPException(status_code=404, detail="Purchase order not found")
+
+    new_event = ShipmentEvent(
+        location=event_in.location,
+        status=event_in.status,
+        timestamp=datetime.utcnow(),
+        notes=event_in.notes,
+    )
+
+    purchase_order.shipment_events.append(new_event)
+    purchase_order.current_location = event_in.location
+    purchase_order.updated_at = datetime.utcnow()
+    await purchase_order.save()
+
     return purchase_order
