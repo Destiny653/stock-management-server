@@ -10,6 +10,8 @@ from models.product import Product
 from models.product_review import ProductReview
 from models.storefront_order import StorefrontOrder, StorefrontOrderItem
 from models.category import Category
+from models.warehouse import Warehouse
+from models.location import Location
 from schemas.product_review import ReviewCreate, ReviewResponse
 from schemas.storefront_order import StorefrontOrderCreate, StorefrontOrderResponse
 
@@ -35,6 +37,7 @@ async def get_storefront_products(
     slug: str,
     search: Optional[str] = None,
     category: Optional[str] = None,
+    location: Optional[str] = None,
     min_price: Optional[float] = None,
     max_price: Optional[float] = None,
     sort: Optional[str] = Query(default="newest", pattern="^(newest|price_asc|price_desc|name_asc|name_desc|rating|best_selling|featured)$"),
@@ -56,6 +59,14 @@ async def get_storefront_products(
 
     if category:
         query["category"] = category
+
+    if location:
+        location_query = {"$or": [{"location_id": location}, {"warehouse_id": location}]}
+        if "$or" in query:
+            existing_or = query.pop("$or")
+            query["$and"] = [{"$or": existing_or}, location_query]
+        else:
+            query.update(location_query)
 
     products = await Product.find(query).skip(skip).limit(limit).to_list()
 
@@ -93,6 +104,13 @@ async def get_storefront_products(
         # We'll calculate it on the fly below or just use a placeholder
         pass # Will handle after computing fields
 
+    # Fetch locations and warehouses for mapping
+    warehouses = await Warehouse.find({"organization_id": org_id}).to_list()
+    locations = await Location.find({"organization_id": org_id}).to_list()
+    
+    warehouse_map = {str(w.id): w.name for w in warehouses}
+    location_map = {str(l.id): l.name for l in locations}
+
     # Build response with computed fields
     result = []
     for p in products:
@@ -101,6 +119,12 @@ async def get_storefront_products(
         reviews = await ProductReview.find({"product_id": str(p.id), "is_approved": True}).to_list()
         avg_rating = round(sum(r.rating for r in reviews) / len(reviews), 1) if reviews else 0
         review_count = len(reviews)
+
+        location_name = None
+        if getattr(p, "warehouse_id", None) and p.warehouse_id in warehouse_map:
+            location_name = warehouse_map[p.warehouse_id]
+        elif getattr(p, "location_id", None) and p.location_id in location_map:
+            location_name = location_map[p.location_id]
 
         result.append({
             "id": str(p.id),
@@ -114,6 +138,7 @@ async def get_storefront_products(
             "lowest_price": lowest_price,
             "avg_rating": avg_rating,
             "review_count": review_count,
+            "location_name": location_name,
             "created_at": p.created_at.isoformat(),
         })
 
@@ -195,6 +220,23 @@ async def get_storefront_categories(slug: str) -> Any:
             "product_count": count,
         })
 
+    return result
+
+
+@router.get("/{slug}/locations")
+async def get_storefront_locations(slug: str) -> Any:
+    """List available locations/warehouses for a storefront (public)."""
+    config = await _get_config_by_slug(slug)
+    
+    warehouses = await Warehouse.find({"organization_id": config.organization_id}).to_list()
+    locations = await Location.find({"organization_id": config.organization_id}).to_list()
+    
+    result = []
+    for w in warehouses:
+        result.append({"id": str(w.id), "name": w.name, "type": "warehouse"})
+    for l in locations:
+        result.append({"id": str(l.id), "name": l.name, "type": "location"})
+        
     return result
 
 
