@@ -7,7 +7,7 @@ from beanie import PydanticObjectId
 from api import deps
 from models.user import User
 from models.purchase_order import PurchaseOrder, POItem, ShipmentEvent
-from models.product import Product
+from models.product import Product, StockRecord
 from models.stock_movement import StockMovement, MovementType
 from schemas.purchase_order import PurchaseOrderCreate, PurchaseOrderUpdate, PurchaseOrderResponse
 from services.notification import send_order_update, send_low_stock_alert
@@ -263,8 +263,33 @@ async def receive_purchase_order(
                 variant_idx = 0
             
             if variant_idx != -1:
-                # Update variant stock
+                # Update variant stock (total)
                 product.variants[variant_idx].stock += item.quantity_ordered
+                
+                # Update per-warehouse stock
+                dest_warehouse_id = item.location_id or purchase_order.warehouse_id
+                dest_warehouse_name = item.location_name or purchase_order.warehouse
+                
+                if dest_warehouse_id:
+                    # Find or create StockRecord
+                    found = False
+                    if not hasattr(product.variants[variant_idx], 'warehouse_stocks') or product.variants[variant_idx].warehouse_stocks is None:
+                        product.variants[variant_idx].warehouse_stocks = []
+                    
+                    for ws in product.variants[variant_idx].warehouse_stocks:
+                        if ws.warehouse_id == dest_warehouse_id:
+                            ws.stock += item.quantity_ordered
+                            found = True
+                            break
+                    
+                    if not found:
+                        product.variants[variant_idx].warehouse_stocks.append(
+                            StockRecord(
+                                warehouse_id=dest_warehouse_id,
+                                warehouse_name=dest_warehouse_name,
+                                stock=item.quantity_ordered
+                            )
+                        )
                 
                 # Update total status
                 total_stock = sum(v.stock for v in product.variants)

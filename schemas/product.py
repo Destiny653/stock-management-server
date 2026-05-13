@@ -1,8 +1,14 @@
 """Product schemas - Updated with organization support"""
 from typing import Optional, List, Dict
 from datetime import datetime, date
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from models.product import ProductCategory, ProductStatus
+
+
+class StockRecord(BaseModel):
+    warehouse_id: str
+    warehouse_name: Optional[str] = None
+    stock: int
 
 
 class ProductVariant(BaseModel):
@@ -11,6 +17,7 @@ class ProductVariant(BaseModel):
     unit_price: float
     cost_price: float
     stock: int
+    warehouse_stocks: List[StockRecord] = Field(default_factory=list)
     image_url: Optional[str] = None
     barcode: Optional[str] = None
     weight: Optional[float] = None

@@ -24,12 +24,19 @@ class ProductStatus(str, Enum):
     DISCONTINUED = "discontinued"
 
 
+class StockRecord(BaseModel):
+    warehouse_id: str
+    warehouse_name: Optional[str] = None
+    stock: int
+
+
 class ProductVariant(BaseModel):
     sku: str
     attributes: Dict[str, str]
     unit_price: float
     cost_price: float
     stock: int
+    warehouse_stocks: List[StockRecord] = Field(default_factory=list)
     image_url: Optional[str] = None
     barcode: Optional[str] = None
     weight: Optional[float] = None

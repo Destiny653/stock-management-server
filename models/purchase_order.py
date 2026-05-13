@@ -42,6 +42,8 @@ class POItem(BaseModel):
     unit_cost: float
     total: float
     expiry_date: Optional[date] = None
+    location_id: Optional[str] = None
+    location_name: Optional[str] = None
 
 
 class PurchaseOrder(Document):
