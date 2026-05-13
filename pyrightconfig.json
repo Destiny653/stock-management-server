@@ -1,0 +1,9 @@
+{
+  "venvPath": "/Users/macbook/Documents/Market/Inventory/stock-management-server",
+  "venv": ".venv",
+  "pythonVersion": "3.14",
+  "extraPaths": [
+    "/Users/macbook/Documents/Market/Inventory/stock-management-server",
+    "/Users/macbook/Documents/Market/Inventory/stock-management-server/.venv/lib/python3.14/site-packages"
+  ]
+}

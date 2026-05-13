@@ -1,4 +1,5 @@
 import requests
+from typing import Optional
 import base64
 import uuid
 import logging
@@ -41,8 +42,8 @@ class PayUnitService:
         phone_number: str,
         gateway: str,
         transaction_id: str,
-        return_url: str = None,
-        notify_url: str = None,
+        return_url: Optional[str] = None,
+        notify_url: Optional[str] = None,
     ) -> dict:
         """
         Initiate a mobile money collection via PayUnit.

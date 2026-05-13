@@ -287,6 +287,18 @@ async def receive_purchase_order(
                 else:
                     product.status = "active"
                 
+                # Update associations from PO
+                if item.expiry_date:
+                    product.expiry_date = item.expiry_date
+                
+                if purchase_order.warehouse_id:
+                    product.warehouse_id = purchase_order.warehouse_id
+                
+                if purchase_order.supplier_id:
+                    product.supplier_id = purchase_order.supplier_id
+                if purchase_order.supplier_name:
+                    product.supplier_name = purchase_order.supplier_name
+
                 product.updated_at = datetime.utcnow()
                 await product.save()
                 

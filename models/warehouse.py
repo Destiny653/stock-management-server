@@ -1,6 +1,7 @@
 """Warehouse model - Storage locations"""
 from typing import Optional, Annotated
 from datetime import datetime
+# pyrefly: ignore [missing-import]
 from beanie import Document, Indexed
 from pydantic import Field
 from enum import Enum
@@ -21,6 +22,7 @@ class Warehouse(Document):
     capacity: Optional[int] = None
     current_utilization: Optional[float] = None
     status: WarehouseStatus = WarehouseStatus.ACTIVE
+    phone: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 

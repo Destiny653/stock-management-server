@@ -29,6 +29,7 @@ class Supplier(Document):
     lead_time_days: Optional[int] = None
     rating: Optional[float] = None
     status: SupplierStatus = SupplierStatus.ACTIVE
+    phone: Optional[str] = None
     notes: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

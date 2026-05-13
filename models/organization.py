@@ -41,6 +41,7 @@ class Organization(Document):
 
     # Account setup wizard
     setup_completed: bool = False
+    setup_current_step: int = 0
     setup_answers: Optional[Dict[str, Any]] = None  # Questionnaire answers (entity counts)
 
     created_at: datetime = Field(default_factory=datetime.utcnow)

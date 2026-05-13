@@ -41,6 +41,7 @@ class POItem(BaseModel):
     quantity_received: int = 0
     unit_cost: float
     total: float
+    expiry_date: Optional[date] = None
 
 
 class PurchaseOrder(Document):
@@ -59,6 +60,7 @@ class PurchaseOrder(Document):
     notes: Optional[str] = None
     approved_by: Optional[str] = None
     warehouse: Optional[str] = None
+    warehouse_id: Optional[str] = None
     # Shipment tracking
     tracking_number: Optional[str] = None
     shipping_method: Optional[str] = None
