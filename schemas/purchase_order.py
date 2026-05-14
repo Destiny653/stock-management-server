@@ -34,6 +34,8 @@ class PurchaseOrderBase(BaseModel):
     approved_by: Optional[str] = None
     warehouse: Optional[str] = None
     warehouse_id: Optional[str] = None
+    origin_location: Optional[str] = None
+    origin_id: Optional[str] = None
     tracking_number: Optional[str] = None
     shipping_method: Optional[str] = None
     current_location: Optional[str] = None
@@ -59,6 +61,8 @@ class PurchaseOrderUpdate(BaseModel):
     approved_by: Optional[str] = None
     warehouse: Optional[str] = None
     warehouse_id: Optional[str] = None
+    origin_location: Optional[str] = None
+    origin_id: Optional[str] = None
     tracking_number: Optional[str] = None
     shipping_method: Optional[str] = None
     current_location: Optional[str] = None

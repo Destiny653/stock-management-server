@@ -63,6 +63,8 @@ class PurchaseOrder(Document):
     approved_by: Optional[str] = None
     warehouse: Optional[str] = None
     warehouse_id: Optional[str] = None
+    origin_location: Optional[str] = None
+    origin_id: Optional[str] = None
     # Shipment tracking
     tracking_number: Optional[str] = None
     shipping_method: Optional[str] = None

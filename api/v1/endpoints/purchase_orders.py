@@ -6,8 +6,8 @@ from pydantic import BaseModel
 from beanie import PydanticObjectId
 from api import deps
 from models.user import User
-from models.purchase_order import PurchaseOrder, POItem, ShipmentEvent
-from models.product import Product, StockRecord
+from models.purchase_order import PurchaseOrder, POItem, ShipmentEvent, POStatus
+from models.product import Product, StockRecord, ProductStatus
 from models.stock_movement import StockMovement, MovementType
 from schemas.purchase_order import PurchaseOrderCreate, PurchaseOrderUpdate, PurchaseOrderResponse
 from services.notification import send_order_update, send_low_stock_alert
@@ -81,7 +81,7 @@ async def read_purchase_order(
     """
     Get purchase order by ID within an organization.
     """
-    query = {"_id": PydanticObjectId(po_id)}
+    query: dict = {"_id": PydanticObjectId(po_id)}
     if organization_id:
         query["organization_id"] = organization_id
         
@@ -101,7 +101,7 @@ async def update_purchase_order(
     """
     Update a purchase order within an organization.
     """
-    query = {"_id": PydanticObjectId(po_id)}
+    query: dict = {"_id": PydanticObjectId(po_id)}
     if organization_id:
         query["organization_id"] = organization_id
         
@@ -134,7 +134,7 @@ async def delete_purchase_order(
     """
     Delete a purchase order within an organization.
     """
-    query = {"_id": PydanticObjectId(po_id)}
+    query: dict = {"_id": PydanticObjectId(po_id)}
     if organization_id:
         query["organization_id"] = organization_id
         
@@ -154,7 +154,7 @@ async def approve_purchase_order(
     """
     Approve a purchase order.
     """
-    query = {"_id": PydanticObjectId(po_id)}
+    query: dict = {"_id": PydanticObjectId(po_id)}
     if organization_id:
         query["organization_id"] = organization_id
         
@@ -167,7 +167,7 @@ async def approve_purchase_order(
     
     await purchase_order.update({
         "$set": {
-            "status": "approved",
+            "status": POStatus.APPROVED,
             "approved_by": str(current_user.id),
             "updated_at": datetime.utcnow()
         }
@@ -229,7 +229,7 @@ async def receive_purchase_order(
     """
     Mark a purchase order as received and update product variant stock.
     """
-    query = {"_id": PydanticObjectId(po_id)}
+    query: dict = {"_id": PydanticObjectId(po_id)}
     if organization_id:
         query["organization_id"] = organization_id
         
@@ -297,9 +297,9 @@ async def receive_purchase_order(
                 effective_reorder_point = product.reorder_point if product.reorder_point is not None else 10
                 
                 if total_stock == 0:
-                    product.status = "out_of_stock"
+                    product.status = ProductStatus.OUT_OF_STOCK
                 elif total_stock <= effective_reorder_point:
-                    product.status = "low_stock"
+                    product.status = ProductStatus.LOW_STOCK
                     # Trigger low stock alert
                     recipients = await get_org_notification_recipients(purchase_order.organization_id)
                     for recipient in recipients:
@@ -310,7 +310,7 @@ async def receive_purchase_order(
                             reorder_point=effective_reorder_point
                         )
                 else:
-                    product.status = "active"
+                    product.status = ProductStatus.ACTIVE
                 
                 # Update associations from PO
                 if item.expiry_date:
@@ -341,7 +341,7 @@ async def receive_purchase_order(
                 await movement.create()
 
     # Update PO status
-    purchase_order.status = "received"
+    purchase_order.status = POStatus.RECEIVED
     purchase_order.received_date = datetime.utcnow().date()
     purchase_order.updated_at = datetime.utcnow()
     # Mark all items as fully received if not already
@@ -381,7 +381,7 @@ async def add_tracking_event(
     Add a shipment tracking event to a purchase order.
     Automatically updates current_location to the event's location.
     """
-    query = {"_id": PydanticObjectId(po_id)}
+    query: dict = {"_id": PydanticObjectId(po_id)}
     if organization_id:
         query["organization_id"] = organization_id
 

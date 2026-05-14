@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from beanie import PydanticObjectId
 from api import deps
 from models.user import User
-from models.product import Product
+from models.product import Product, ProductStatus
 from models.alert import Alert, AlertType, AlertPriority
 from schemas.product import ProductCreate, ProductUpdate, ProductResponse
 
@@ -22,7 +22,7 @@ async def upload_product_image(
     Upload a product image and return the path.
     """
     # Check if file is an image
-    if not file.content_type.startswith("image/"):
+    if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
     
 
@@ -30,6 +30,9 @@ async def upload_product_image(
     upload_dir = "uploads/products"
     
     # Generate unique filename
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Invalid file name")
+        
     file_extension = os.path.splitext(file.filename)[1]
     filename = f"{uuid.uuid4()}{file_extension}"
     file_path = os.path.join(upload_dir, filename)
@@ -161,7 +164,7 @@ async def read_product(
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid product ID format")
     
-    query = {"_id": obj_id}
+    query: dict = {"_id": obj_id}
     if organization_id:
         query["organization_id"] = organization_id
         
@@ -186,7 +189,7 @@ async def update_product(
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid product ID format")
     
-    query = {"_id": obj_id}
+    query: dict = {"_id": obj_id}
     if organization_id:
         query["organization_id"] = organization_id
         
@@ -221,13 +224,13 @@ async def update_product(
         setattr(product, key, value)
     
     # Recalculate status
-    total_stock = sum(v.stock if hasattr(v, "stock") else v.get("stock", 0) for v in product.variants)
+    total_stock = sum(v.stock for v in product.variants)
     effective_reorder_point = product.reorder_point if product.reorder_point is not None else 10
     product_id_str = str(product.id)
     org_id = product.organization_id
 
     if total_stock == 0:
-        product.status = "out_of_stock"
+        product.status = ProductStatus.OUT_OF_STOCK
         existing = await Alert.find_one({
             "organization_id": org_id, "product_id": product_id_str,
             "type": AlertType.OUT_OF_STOCK, "is_dismissed": False,
@@ -241,7 +244,7 @@ async def update_product(
                 product_id=product_id_str, action_url="/Inventory",
             ).create()
     elif total_stock <= effective_reorder_point:
-        product.status = "low_stock"
+        product.status = ProductStatus.LOW_STOCK
         existing = await Alert.find_one({
             "organization_id": org_id, "product_id": product_id_str,
             "type": AlertType.LOW_STOCK, "is_dismissed": False,
@@ -255,7 +258,7 @@ async def update_product(
                 product_id=product_id_str, action_url="/Inventory",
             ).create()
     else:
-        product.status = "active"
+        product.status = ProductStatus.ACTIVE
         
     product.updated_at = datetime.utcnow()
     await product.save()
@@ -276,7 +279,7 @@ async def delete_product(
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid product ID format")
     
-    query = {"_id": obj_id}
+    query: dict = {"_id": obj_id}
     if organization_id:
         query["organization_id"] = organization_id
         
@@ -325,7 +328,7 @@ async def get_low_stock_products(
     """
     Get products that are at or below their reorder point.
     """
-    query = {
+    query: dict = {
         "$expr": {
             "$lte": [
                 {"$sum": "$variants.stock"},

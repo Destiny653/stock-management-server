@@ -2,6 +2,7 @@
 from typing import List, Any, Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
+from beanie import PydanticObjectId
 from api import deps
 from models.user import User
 from models.category import Category
@@ -56,7 +57,7 @@ async def read_category(
     """
     Get category by ID within an organization.
     """
-    query = {"_id": category_id}
+    query: dict = {"_id": PydanticObjectId(category_id)}
     if organization_id:
         query["organization_id"] = organization_id
         
@@ -76,7 +77,7 @@ async def update_category(
     """
     Update a category within an organization.
     """
-    query = {"_id": category_id}
+    query: dict = {"_id": PydanticObjectId(category_id)}
     if organization_id:
         query["organization_id"] = organization_id
         
@@ -104,7 +105,7 @@ async def delete_category(
     """
     Delete a category within an organization.
     """
-    query = {"_id": category_id}
+    query: dict = {"_id": PydanticObjectId(category_id)}
     if organization_id:
         query["organization_id"] = organization_id
         

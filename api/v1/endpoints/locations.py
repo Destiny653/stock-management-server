@@ -2,6 +2,7 @@
 from typing import List, Any, Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
+from beanie import PydanticObjectId
 from api import deps
 from models.user import User
 from models.location import Location
@@ -53,7 +54,7 @@ async def read_location(
     """
     Get location by ID within an organization.
     """
-    query = {"_id": location_id}
+    query: dict = {"_id": PydanticObjectId(location_id)}
     if organization_id:
         query["organization_id"] = organization_id
         
@@ -73,7 +74,7 @@ async def update_location(
     """
     Update a location within an organization.
     """
-    query = {"_id": location_id}
+    query: dict = {"_id": PydanticObjectId(location_id)}
     if organization_id:
         query["organization_id"] = organization_id
         
@@ -101,7 +102,7 @@ async def delete_location(
     """
     Delete a location within an organization.
     """
-    query = {"_id": location_id}
+    query: dict = {"_id": PydanticObjectId(location_id)}
     if organization_id:
         query["organization_id"] = organization_id
         

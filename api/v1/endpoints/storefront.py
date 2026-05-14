@@ -400,3 +400,21 @@ async def submit_order(slug: str, order_in: StorefrontOrderCreate) -> Any:
         "message": "Order placed successfully",
     }
 
+@router.get("/{slug}/orders")
+async def get_customer_orders(
+    slug: str,
+    phone: str,
+    email: Optional[str] = None,
+) -> Any:
+    """Get orders for a specific customer by phone/email (public)."""
+    config = await _get_config_by_slug(slug)
+    query: dict = {"organization_id": config.organization_id}
+    
+    # We allow lookup by phone or email
+    if email:
+        query["$or"] = [{"customer_phone": phone}, {"customer_email": email}]
+    else:
+        query["customer_phone"] = phone
+        
+    orders = await StorefrontOrder.find(query).sort("-created_at").to_list()
+    return orders
