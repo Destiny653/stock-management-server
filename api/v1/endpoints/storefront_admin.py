@@ -23,6 +23,7 @@ async def get_storefront_config(
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """Get own organization's storefront config."""
+    import json
     org_id = current_user.organization_id
     if not org_id:
         raise HTTPException(status_code=400, detail="No organization associated with user")
@@ -30,7 +31,15 @@ async def get_storefront_config(
     config = await StorefrontConfig.find_one({"organization_id": org_id})
     if not config:
         return None
-    return config
+
+    # Inject platform-level allowed payment methods so the frontend can filter options
+    platform_settings = await PlatformSettings.find_one()
+    platform_allowed = platform_settings.allowed_payment_methods if platform_settings else ["mtn", "orange", "stripe"]
+
+    # Use model_dump_json to safely serialize ObjectId/_id fields, then parse back to dict
+    config_dict = json.loads(config.model_dump_json())
+    config_dict["platform_allowed_payment_methods"] = platform_allowed
+    return config_dict
 
 
 @router.put("/config")
