@@ -18,6 +18,7 @@ class AlertType(str, Enum):
     STORAGE_WARNING = "storage_warning"
     STORAGE_EXCEEDED = "storage_exceeded"
     PO_RECEIVED = "po_received"
+    STOREFRONT_ORDER = "storefront_order"
     SYSTEM = "system"
 
 

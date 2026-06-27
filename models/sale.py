@@ -27,6 +27,7 @@ class SaleItem(BaseModel):
     quantity: int
     unit_price: float
     total: float
+    image_url: Optional[str] = None
 
 
 class Sale(Document):

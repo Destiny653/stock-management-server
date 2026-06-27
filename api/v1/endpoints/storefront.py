@@ -13,6 +13,7 @@ from models.storefront_order import StorefrontOrder, StorefrontOrderItem
 from models.category import Category
 from models.warehouse import Warehouse
 from models.location import Location
+from models.alert import Alert, AlertType, AlertPriority
 from schemas.product_review import ReviewCreate, ReviewResponse
 from schemas.storefront_order import StorefrontOrderCreate, StorefrontOrderResponse
 
@@ -30,7 +31,23 @@ async def _get_config_by_slug(slug: str) -> StorefrontConfig:
 async def get_storefront(slug: str) -> Any:
     """Get storefront configuration by slug (public)."""
     config = await _get_config_by_slug(slug)
-    return config
+    platform_settings = await PlatformSettings.find_one()
+    default_hero = platform_settings.default_hero_image if platform_settings else None
+    allowed_payments = platform_settings.allowed_payment_methods if platform_settings else [
+        "momo",
+        "orange-money",
+        "visa",
+        "mastercard",
+        "apple-pay",
+        "google-pay",
+        "paypal",
+    ]
+    
+    data = config.model_dump()
+    data["id"] = str(config.id)
+    data["default_hero_image"] = default_hero
+    data["allowed_payment_methods"] = allowed_payments
+    return data
 
 
 @router.get("/{slug}/products")
@@ -114,9 +131,30 @@ async def get_storefront_products(
 
     # Build response with computed fields
     result = []
+    now = datetime.utcnow()
     for p in products:
         total_stock = sum(v.stock for v in p.variants)
-        lowest_price = min((v.unit_price for v in p.variants), default=0) if p.variants else 0
+        
+        is_promo_active = False
+        if getattr(p, "is_on_promotion", False) and getattr(p, "promotion_start", None) and getattr(p, "promotion_end", None):
+            # Convert timezone-aware datetimes if necessary, assuming utcnow
+            promo_start = p.promotion_start.replace(tzinfo=None) if p.promotion_start.tzinfo else p.promotion_start
+            promo_end = p.promotion_end.replace(tzinfo=None) if p.promotion_end.tzinfo else p.promotion_end
+            if promo_start <= now <= promo_end:
+                is_promo_active = True
+
+        original_price = min((v.unit_price for v in p.variants), default=0) if p.variants else 0
+        
+        variants_dump = []
+        for v in p.variants:
+            vdump = v.model_dump()
+            if is_promo_active and getattr(v, "promotion_price", None) is not None:
+                vdump["original_price"] = v.unit_price
+                vdump["unit_price"] = v.promotion_price
+            variants_dump.append(vdump)
+            
+        lowest_price = min((v["unit_price"] for v in variants_dump), default=0) if variants_dump else 0
+
         reviews = await ProductReview.find({"product_id": str(p.id), "is_approved": True}).to_list()
         avg_rating = round(sum(r.rating for r in reviews) / len(reviews), 1) if reviews else 0
         review_count = len(reviews)
@@ -134,8 +172,9 @@ async def get_storefront_products(
             "description": p.description,
             "image_url": p.image_url,
             "status": p.status,
-            "variants": [v.model_dump() for v in p.variants],
+            "variants": variants_dump,
             "total_stock": total_stock,
+            "original_price": original_price,
             "lowest_price": lowest_price,
             "avg_rating": avg_rating,
             "review_count": review_count,
@@ -171,6 +210,26 @@ async def get_storefront_product(slug: str, product_id: str) -> Any:
 
     total_stock = sum(v.stock for v in product.variants)
 
+    now = datetime.utcnow()
+    is_promo_active = False
+    if getattr(product, "is_on_promotion", False) and getattr(product, "promotion_start", None) and getattr(product, "promotion_end", None):
+        promo_start = product.promotion_start.replace(tzinfo=None) if product.promotion_start.tzinfo else product.promotion_start
+        promo_end = product.promotion_end.replace(tzinfo=None) if product.promotion_end.tzinfo else product.promotion_end
+        if promo_start <= now <= promo_end:
+            is_promo_active = True
+
+    original_price = min((v.unit_price for v in product.variants), default=0) if product.variants else 0
+    
+    variants_dump = []
+    for v in product.variants:
+        vdump = v.model_dump()
+        if is_promo_active and getattr(v, "promotion_price", None) is not None:
+            vdump["original_price"] = v.unit_price
+            vdump["unit_price"] = v.promotion_price
+        variants_dump.append(vdump)
+        
+    lowest_price = min((v["unit_price"] for v in variants_dump), default=0) if variants_dump else 0
+
     return {
         "id": str(product.id),
         "name": product.name,
@@ -178,9 +237,10 @@ async def get_storefront_product(slug: str, product_id: str) -> Any:
         "description": product.description,
         "image_url": product.image_url,
         "status": product.status,
-        "variants": [v.model_dump() for v in product.variants],
+        "variants": variants_dump,
         "total_stock": total_stock,
-        "lowest_price": min((v.unit_price for v in product.variants), default=0),
+        "original_price": original_price,
+        "lowest_price": lowest_price,
         "avg_rating": avg_rating,
         "review_count": len(reviews),
         "reviews": [
@@ -389,6 +449,20 @@ async def submit_order(slug: str, order_in: StorefrontOrderCreate) -> Any:
         notes=order_in.notes,
     )
     await order.create()
+
+    # Create system notification for the purchase order
+    try:
+        alert = Alert(
+            organization_id=config.organization_id,
+            type=AlertType.STOREFRONT_ORDER,
+            priority=AlertPriority.HIGH,
+            title="New Storefront Order",
+            message=f"A new order {order_ref} was placed by {order_in.customer_name} for a total of {total} {config.currency or 'XAF'}.",
+            action_url=f"/storefront-settings?tab=orders"
+        )
+        await alert.create()
+    except Exception as e:
+        print(f"Failed to create alert notification: {e}")
 
     return {
         "order_ref": order_ref,

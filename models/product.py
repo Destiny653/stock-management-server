@@ -41,6 +41,7 @@ class ProductVariant(BaseModel):
     barcode: Optional[str] = None
     weight: Optional[float] = None
     dimensions: Optional[str] = None
+    promotion_price: Optional[float] = None
 
 
 class Product(Document):
@@ -59,6 +60,9 @@ class Product(Document):
     expiry_date: Optional[date] = None
     last_restocked: Optional[date] = None
     variants: List[ProductVariant] = Field(default_factory=list)
+    is_on_promotion: bool = False
+    promotion_start: Optional[datetime] = None
+    promotion_end: Optional[datetime] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 

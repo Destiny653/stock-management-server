@@ -19,6 +19,40 @@ async def upload_to_gridfs(file_bytes: bytes, filename: str, bucket_name: str, c
     await grid_in.close()
     return build_upload_url(bucket_name, filename)
 
+async def delete_upload(image_url: str | None) -> None:
+    """Deletes an image from GridFS and local filesystem if it exists."""
+    if not image_url:
+        return
+        
+    # Standardize path
+    clean_url = image_url.replace("http://127.0.0.1:8000", "").replace("http://localhost:8000", "")
+    parts = [p for p in clean_url.split("/") if p]
+    
+    # URL is like /uploads/{bucket}/{filename}
+    if len(parts) >= 3 and parts[0] == "uploads":
+        bucket_name = parts[1]
+        filename = parts[2]
+        
+        # 1. Try deleting from GridFS
+        try:
+            from db.mongodb import db
+            if db is not None:
+                fs = AsyncIOMotorGridFSBucket(db, bucket_name=bucket_name)
+                cursor = fs.find({"filename": filename})
+                file_docs = await cursor.to_list(length=1)
+                if file_docs:
+                    await fs.delete(file_docs[0]["_id"])
+        except Exception as e:
+            print(f"Failed to delete GridFS file {filename}: {e}")
+            
+        # 2. Try deleting from local filesystem
+        try:
+            file_path = UPLOAD_ROOT / bucket_name / filename
+            if file_path.exists():
+                file_path.unlink()
+        except Exception as e:
+            print(f"Failed to delete local file {file_path}: {e}")
+
 # Keep these for backwards compatibility or local testing if needed
 BASE_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_UPLOAD_ROOT = BASE_DIR / "uploads"

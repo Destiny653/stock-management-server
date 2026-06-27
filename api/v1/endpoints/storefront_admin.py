@@ -81,6 +81,15 @@ async def update_storefront_config(
                     existing_social[k] = v
             update_data["social_links"] = existing_social
 
+        # Clean up removed hero slides
+        if "hero_slides" in update_data and update_data["hero_slides"] is not None:
+            old_images = [slide.image_url for slide in (config.hero_slides or []) if slide.image_url]
+            new_images = [slide["image_url"] for slide in update_data["hero_slides"] if slide.get("image_url")]
+            from core.uploads import delete_upload
+            for img in old_images:
+                if img not in new_images:
+                    await delete_upload(img)
+
         update_data["updated_at"] = datetime.utcnow()
 
         # Slug uniqueness check

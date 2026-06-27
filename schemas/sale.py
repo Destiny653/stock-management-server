@@ -12,6 +12,7 @@ class SaleItemCreate(BaseModel):
     quantity: int
     unit_price: float
     total: float
+    image_url: Optional[str] = None
 
 
 class SaleBase(BaseModel):

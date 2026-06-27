@@ -222,6 +222,9 @@ async def update_product(
 
     # Apply updates to the product object
     for key, value in update_data.items():
+        if key == "variants" and value is not None:
+            from models.product import ProductVariant
+            value = [ProductVariant(**v) if isinstance(v, dict) else v for v in value]
         setattr(product, key, value)
     
     # Recalculate status
@@ -287,6 +290,15 @@ async def delete_product(
     product = await Product.find_one(query)
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
+        
+    # Delete images from storage
+    from core.uploads import delete_upload
+    if product.image_url:
+        await delete_upload(product.image_url)
+    for v in product.variants:
+        if v.image_url:
+            await delete_upload(v.image_url)
+            
     await product.delete()
     return product
 

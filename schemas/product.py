@@ -22,6 +22,7 @@ class ProductVariant(BaseModel):
     barcode: Optional[str] = None
     weight: Optional[float] = None
     dimensions: Optional[str] = None
+    promotion_price: Optional[float] = None
 
 
 class ProductBase(BaseModel):
@@ -39,6 +40,9 @@ class ProductBase(BaseModel):
     expiry_date: Optional[date] = None
     last_restocked: Optional[date] = None
     variants: List[ProductVariant] = []
+    is_on_promotion: bool = False
+    promotion_start: Optional[datetime] = None
+    promotion_end: Optional[datetime] = None
 
 
 class ProductCreate(ProductBase):
@@ -60,6 +64,9 @@ class ProductUpdate(BaseModel):
     expiry_date: Optional[date] = None
     last_restocked: Optional[date] = None
     variants: Optional[List[ProductVariant]] = None
+    is_on_promotion: Optional[bool] = None
+    promotion_start: Optional[datetime] = None
+    promotion_end: Optional[datetime] = None
 
 
 from beanie import PydanticObjectId
