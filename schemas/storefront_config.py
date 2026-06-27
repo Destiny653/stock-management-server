@@ -103,6 +103,8 @@ class StorefrontConfigUpdate(BaseModel):
     featured_category_ids: Optional[List[str]] = None
     featured_product_ids: Optional[List[str]] = None
     contact_email: Optional[str] = None
+    accepted_payment_methods: Optional[List[str]] = None
+    contact_phone: Optional[str] = None
     contact_phone: Optional[str] = None
     address: Optional[str] = None
 
@@ -145,6 +147,7 @@ class StorefrontConfigResponse(BaseModel):
     contact_email: Optional[str] = None
     contact_phone: Optional[str] = None
     address: Optional[str] = None
+    accepted_payment_methods: List[str] = []
     created_at: datetime
     updated_at: datetime
 

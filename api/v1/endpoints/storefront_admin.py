@@ -6,7 +6,9 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 
 from api import deps
+from core.uploads import build_upload_url, get_upload_dir
 from models.user import User
+from models.platform_settings import PlatformSettings
 from models.storefront_config import StorefrontConfig, ThemeConfig, HeroSlide, SocialLinks
 from models.product_review import ProductReview
 from models.storefront_order import StorefrontOrder
@@ -50,6 +52,19 @@ async def update_storefront_config(
         # Update existing
         update_data = config_in.model_dump(exclude_unset=True)
 
+        platform_settings = await PlatformSettings.find_one()
+        if not platform_settings:
+            platform_settings = PlatformSettings()
+        allowed_methods = platform_settings.allowed_payment_methods or []
+
+        if "accepted_payment_methods" in update_data and update_data["accepted_payment_methods"] is not None and allowed_methods:
+            invalid = [m for m in update_data["accepted_payment_methods"] if m not in allowed_methods]
+            if invalid:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Selected payment methods are not allowed by the platform: {', '.join(invalid)}"
+                )
+
         # Handle nested theme update (merge, don't replace)
         if "theme" in update_data and update_data["theme"]:
             existing_theme = config.theme.model_dump() if config.theme else {}
@@ -89,6 +104,19 @@ async def update_storefront_config(
         existing = await StorefrontConfig.find_one({"slug": data["slug"]})
         if existing:
             raise HTTPException(status_code=400, detail="This slug is already taken")
+
+        platform_settings = await PlatformSettings.find_one()
+        if not platform_settings:
+            platform_settings = PlatformSettings()
+        allowed_methods = platform_settings.allowed_payment_methods or []
+
+        if "accepted_payment_methods" in data and data["accepted_payment_methods"] is not None and allowed_methods:
+            invalid = [m for m in data["accepted_payment_methods"] if m not in allowed_methods]
+            if invalid:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Selected payment methods are not allowed by the platform: {', '.join(invalid)}"
+                )
 
         # Build theme
         theme_data = data.pop("theme", None) or {}
@@ -183,17 +211,19 @@ async def upload_storefront_image(
     if not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
 
-    upload_dir = "uploads/storefront"
-    os.makedirs(upload_dir, exist_ok=True)
+    upload_dir = get_upload_dir("storefront")
+
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Invalid file name")
 
     file_extension = os.path.splitext(file.filename)[1]
     filename = f"{uuid.uuid4()}{file_extension}"
-    file_path = os.path.join(upload_dir, filename)
+    file_path = upload_dir / filename
 
     with open(file_path, "wb") as buffer:
         buffer.write(await file.read())
 
-    return {"url": f"/uploads/storefront/{filename}"}
+    return {"url": build_upload_url("storefront", filename)}
 
 
 @router.get("/reviews")

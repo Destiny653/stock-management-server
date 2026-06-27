@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any, Optional, List
 from fastapi import APIRouter, Depends, HTTPException
 from models.platform_settings import PlatformSettings
 from models.user import User
@@ -12,6 +12,7 @@ class PlatformSettingsUpdate(BaseModel):
     support_email: Optional[str] = None
     platform_name: Optional[str] = None
     default_currency: Optional[str] = None
+    allowed_payment_methods: Optional[List[str]] = None
 
 @router.get("/settings")
 async def get_platform_settings() -> Any:
@@ -23,7 +24,16 @@ async def get_platform_settings() -> Any:
             "support_whatsapp": "+237670000000",
             "support_email": "support@stockflow.com",
             "platform_name": "StockFlow",
-            "default_currency": "CFAF"
+            "default_currency": "CFAF",
+            "allowed_payment_methods": [
+                "momo",
+                "orange-money",
+                "visa",
+                "mastercard",
+                "apple-pay",
+                "google-pay",
+                "paypal",
+            ],
         }
     return settings
 
@@ -48,6 +58,8 @@ async def update_platform_settings(
         settings.platform_name = settings_in.platform_name
     if settings_in.default_currency is not None:
         settings.default_currency = settings_in.default_currency
+    if settings_in.allowed_payment_methods is not None:
+        settings.allowed_payment_methods = settings_in.allowed_payment_methods
         
     await settings.save()
     return settings

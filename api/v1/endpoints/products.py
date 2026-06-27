@@ -5,6 +5,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from beanie import PydanticObjectId
 from api import deps
+from core.uploads import build_upload_url, get_upload_dir
 from models.user import User
 from models.product import Product, ProductStatus
 from models.alert import Alert, AlertType, AlertPriority
@@ -27,7 +28,7 @@ async def upload_product_image(
     
 
     # Create directory if not exists
-    upload_dir = "uploads/products"
+    upload_dir = get_upload_dir("products")
     
     # Generate unique filename
     if not file.filename:
@@ -35,14 +36,14 @@ async def upload_product_image(
         
     file_extension = os.path.splitext(file.filename)[1]
     filename = f"{uuid.uuid4()}{file_extension}"
-    file_path = os.path.join(upload_dir, filename)
+    file_path = upload_dir / filename
     
     # Save file
     with open(file_path, "wb") as buffer:
         buffer.write(await file.read())
     
     # Return the URL/path
-    return {"url": f"/uploads/products/{filename}"}
+    return {"url": build_upload_url("products", filename)}
 
 
 @router.get("/", response_model=List[ProductResponse])

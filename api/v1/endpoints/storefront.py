@@ -5,6 +5,7 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, Query
 from beanie import PydanticObjectId
 
+from models.platform_settings import PlatformSettings
 from models.storefront_config import StorefrontConfig
 from models.product import Product
 from models.product_review import ProductReview

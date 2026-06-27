@@ -9,7 +9,7 @@ from fastapi.openapi.utils import get_openapi
 from api.v1.router import api_router
 from api.v1.swagger_auth import get_swagger_auth
 from middlewares.logging import LoggingMiddleware
-import os
+from core.uploads import UPLOAD_ROOT, get_upload_dir
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -52,9 +52,9 @@ async def get_redoc_documentation(current_active_user=Depends(get_swagger_auth))
     return get_redoc_html(openapi_url="/openapi.json", title="Project Documentation")
 
 # Static files (uploads)
-os.makedirs("uploads/products", exist_ok=True)
-os.makedirs("uploads/storefront", exist_ok=True)
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+get_upload_dir("products")
+get_upload_dir("storefront")
+app.mount("/uploads", StaticFiles(directory=str(UPLOAD_ROOT)), name="uploads")
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
