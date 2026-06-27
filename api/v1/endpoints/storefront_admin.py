@@ -11,7 +11,7 @@ from models.user import User
 from models.platform_settings import PlatformSettings
 from models.storefront_config import StorefrontConfig, ThemeConfig, HeroSlide, SocialLinks
 from models.product_review import ProductReview
-from models.storefront_order import StorefrontOrder
+from models.storefront_order import StorefrontOrder, StorefrontOrderStatus
 from schemas.storefront_config import StorefrontConfigCreate, StorefrontConfigUpdate
 from services.stripe import StripeService
 
@@ -323,7 +323,7 @@ async def list_storefront_orders(
 @router.put("/orders/{order_id}/status")
 async def update_order_status(
     order_id: str,
-    new_status: str = Query(..., pattern="^(pending|confirmed|processing|completed|cancelled)$"),
+    new_status: str = Query(..., pattern="^(pending|confirmed|processing|completed|paid|cancelled)$"),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """Update storefront order status."""
@@ -341,7 +341,7 @@ async def update_order_status(
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
-    order.status = new_status
+    order.status = StorefrontOrderStatus(new_status)
     order.updated_at = datetime.utcnow()
     await order.save()
 
