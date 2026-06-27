@@ -36,14 +36,14 @@ async def upload_product_image(
         
     file_extension = os.path.splitext(file.filename)[1]
     filename = f"{uuid.uuid4()}{file_extension}"
-    file_path = upload_dir / filename
     
-    # Save file
-    with open(file_path, "wb") as buffer:
-        buffer.write(await file.read())
+    # Save file to GridFS
+    from core.uploads import upload_to_gridfs
+    file_bytes = await file.read()
+    url = await upload_to_gridfs(file_bytes, filename, bucket_name="products", content_type=file.content_type)
     
     # Return the URL/path
-    return {"url": build_upload_url("products", filename)}
+    return {"url": url}
 
 
 @router.get("/", response_model=List[ProductResponse])

@@ -28,9 +28,14 @@ from models.storefront_order import StorefrontOrder
 
 from models.platform_settings import PlatformSettings
 
+# Global database objects
+client = None
+db = None
 
 async def init_db():
     """Initialize MongoDB connection and Beanie ODM"""
+    global client, db
+    
     kwargs = {
         "serverSelectionTimeoutMS": 60000,
         "connectTimeoutMS": 60000,
@@ -46,9 +51,10 @@ async def init_db():
         settings.MONGODB_URL,
         **kwargs
     )
+    db = client[settings.MONGODB_DB_NAME]
 
     await init_beanie(
-        database=client[settings.MONGODB_DB_NAME],
+        database=db,
         document_models=[
             Organization,
             User,
