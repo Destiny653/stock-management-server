@@ -213,3 +213,87 @@ async def get_product_movement_history(
         
     movements = await StockMovement.find(query).sort("-created_at").skip(skip).limit(limit).to_list()
     return movements
+
+
+@router.post("/transfer")
+async def transfer_stock_between_stores(
+    transfer_data: dict,
+    current_user: User = Depends(deps.get_current_active_user),
+):
+    """
+    Transfer stock between stores or warehouses.
+    Payload: product_id, from_warehouse_id, to_warehouse_id, quantity, notes, reference
+    """
+    org_id = str(current_user.organization_id)
+    product_id = transfer_data.get("product_id")
+    from_wh = transfer_data.get("from_warehouse_id")
+    to_wh = transfer_data.get("to_warehouse_id")
+    qty = int(transfer_data.get("quantity") or 0)
+    notes = transfer_data.get("notes")
+    ref = transfer_data.get("reference") or f"TRF-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+
+    if qty <= 0:
+        raise HTTPException(status_code=400, detail="Transfer quantity must be greater than 0")
+    if from_wh == to_wh:
+        raise HTTPException(status_code=400, detail="Source and destination warehouses cannot be the same")
+
+    product = await Product.find_one(
+        Product.id == PydanticObjectId(product_id),
+        Product.organization_id == org_id
+    )
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    # Update or initialize warehouse stock records on product
+    source_record = next((ws for ws in product.warehouse_stocks if ws.warehouse_id == from_wh), None)
+    if not source_record or source_record.stock < qty:
+        # Fallback check against product total stock if warehouse records not initialized
+        if product.total_stock < qty:
+            raise HTTPException(status_code=400, detail=f"Insufficient stock ({product.total_stock} available)")
+
+    if source_record:
+        source_record.stock -= qty
+
+    dest_record = next((ws for ws in product.warehouse_stocks if ws.warehouse_id == to_wh), None)
+    if dest_record:
+        dest_record.stock += qty
+    else:
+        product.warehouse_stocks.append({
+            "warehouse_id": to_wh,
+            "warehouse_name": transfer_data.get("to_warehouse_name") or "Store",
+            "stock": qty,
+            "reserved_stock": 0,
+            "damaged_stock": 0
+        })
+
+    product.updated_at = datetime.utcnow()
+    await product.save()
+
+    # Record movement
+    movement = StockMovement(
+        organization_id=org_id,
+        product_id=str(product.id),
+        product_name=product.name,
+        sku=product.sku,
+        type="transferred",
+        quantity=-qty,
+        from_location=from_wh,
+        to_location=to_wh,
+        reference=ref,
+        notes=notes,
+        actor_id=str(current_user.id),
+        actor_name=current_user.username,
+        performed_by=str(current_user.id),
+        unit_cost=product.cost_price,
+        total_cost=qty * product.cost_price,
+    )
+    await movement.insert()
+
+    return {
+        "status": "success",
+        "message": f"Successfully transferred {qty} units of {product.name}",
+        "reference": ref,
+        "product_id": str(product.id),
+        "total_stock": product.total_stock
+    }
+

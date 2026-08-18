@@ -23,6 +23,11 @@ class Warehouse(Document):
     current_utilization: Optional[float] = None
     status: WarehouseStatus = WarehouseStatus.ACTIVE
     phone: Optional[str] = None
+    is_central_hub: bool = False
+    total_available_stock: int = 0
+    total_reserved_stock: int = 0
+    total_damaged_stock: int = 0
+    total_stock_value: float = 0.0
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 

@@ -24,6 +24,10 @@ from api.v1.endpoints import (
     storefront_admin,
     platform,
     stripe_webhooks,
+    barcode,
+    bulk_import,
+    customers,
+    finance,
 )
 
 
@@ -43,6 +47,18 @@ api_router.include_router(users.router, prefix="/users", tags=["Users"])
 
 # Products
 api_router.include_router(products.router, prefix="/products", tags=["Products"])
+
+# Barcode
+api_router.include_router(barcode.router, prefix="/barcode", tags=["Barcode"])
+
+# Bulk Import / Export
+api_router.include_router(bulk_import.router, prefix="/bulk", tags=["Bulk Import & Export"])
+
+# Customers
+api_router.include_router(customers.router, prefix="/customers", tags=["Customers"])
+
+# Finance
+api_router.include_router(finance.router, prefix="/finance", tags=["Finance"])
 
 # Suppliers
 api_router.include_router(suppliers.router, prefix="/suppliers", tags=["Suppliers"])

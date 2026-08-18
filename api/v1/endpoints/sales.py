@@ -50,107 +50,123 @@ async def create_sale(
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
-    Create new sale within an organization and update product quantities.
+    Create new sale within an organization and update product quantities & ledger.
     """
+    import uuid
     data = sale_in.model_dump()
-    if organization_id:
-        data["organization_id"] = organization_id
+    if not data.get("organization_id"):
+        data["organization_id"] = organization_id or getattr(current_user, "organization_id", None)
+    
+    if not data.get("organization_id"):
+        raise HTTPException(status_code=400, detail="organization_id is required")
+
+    org_id = data["organization_id"]
+
+    # Ensure vendor details
+    if not data.get("vendor_name"):
+        data["vendor_name"] = current_user.full_name or current_user.username or "POS Cashier"
+    if not data.get("vendor_id"):
+        data["vendor_id"] = str(current_user.id)
+
+    # Customer fallback mapping
+    if data.get("client_name") and not data.get("customer_name"):
+        data["customer_name"] = data["client_name"]
+    if not data.get("customer_name"):
+        data["customer_name"] = "Walk-in Customer"
+
+    # Auto generate sale_number if missing
+    if not data.get("sale_number"):
+        cnt = await Sale.find(Sale.organization_id == org_id).count()
+        data["sale_number"] = f"INV-{datetime.utcnow().strftime('%Y%m%d')}-{cnt+1:04d}-{uuid.uuid4().hex[:4].upper()}"
         
     existing = await Sale.find_one({
-        "organization_id": data["organization_id"],
-        "sale_number": sale_in.sale_number
+        "organization_id": org_id,
+        "sale_number": data["sale_number"]
     })
     if existing:
-        raise HTTPException(
-            status_code=400,
-            detail="A sale with this number already exists",
-        )
-    
-    # Convert SaleItemCreate to SaleItem and update product quantities
+        data["sale_number"] = f"INV-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:4].upper()}"
+
+    # Convert items and calculate COGS
     sale_items = []
+    total_cogs = 0.0
     
     for item in data["items"]:
-        # Update product quantity
         try:
             prod_id = PydanticObjectId(item["product_id"])
-        except:
+        except Exception:
             prod_id = item["product_id"]
             
         product = await Product.find_one({
-            "_id": prod_id,
-            "organization_id": data["organization_id"]
+            "_id": prod_id
         })
         
-        if product:
-            # Find the variant by SKU
-            variant_idx = -1
+        if not product:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Product '{item['product_name']}' not found."
+            )
+
+        unit_cost = getattr(product, "cost_price", 0.0) or 0.0
+        cogs_item = unit_cost * item["quantity"]
+        total_cogs += cogs_item
+        item["unit_cost"] = unit_cost
+        item["cogs"] = cogs_item
+
+        # Deduct total stock on main product
+        if product.total_stock >= item["quantity"]:
+            product.total_stock -= item["quantity"]
+        else:
+            product.total_stock = 0
+
+        # Update variant if matched
+        if product.variants:
+            v_idx = -1
             if item.get("sku"):
                 for i, v in enumerate(product.variants):
                     if v.sku == item["sku"]:
-                        variant_idx = i
+                        v_idx = i
                         break
-            
-            # If SKU not found but only one variant, use that
-            if variant_idx == -1 and len(product.variants) == 1:
-                variant_idx = 0
-            
-            if variant_idx == -1:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Specific variant SKU is required for product {item['product_name']}"
-                )
+            if v_idx == -1 and len(product.variants) == 1:
+                v_idx = 0
+            if v_idx != -1:
+                product.variants[v_idx].stock = max(0, product.variants[v_idx].stock - item["quantity"])
 
-            new_stock = product.variants[variant_idx].stock - item["quantity"]
-            if new_stock < 0:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Insufficient stock for variant {item.get('sku', 'default')} of product {item['product_name']}"
-                )
-            
-            # Update variant stock
-            product.variants[variant_idx].stock = new_stock
-            
-            # Update status based on total quantity
-            total_stock = sum(v.stock for v in product.variants)
-            if total_stock == 0:
-                product.status = "out_of_stock"
-            elif total_stock <= (product.reorder_point or 0):
-                product.status = "low_stock"
-                # Trigger low stock alert
-                recipients = await get_org_notification_recipients(data["organization_id"])
-                for recipient in recipients:
-                    await send_low_stock_alert(
-                        user=recipient,
-                        product_name=item["product_name"],
-                        current_stock=total_stock,
-                        reorder_point=product.reorder_point or 0
-                    )
-            else:
-                product.status = "active"
-
-            product.updated_at = datetime.utcnow()
-            await product.save()
-
-            # Create stock movement
-            movement = StockMovement(
-                organization_id=data["organization_id"],
-                product_id=str(prod_id),
-                product_name=item["product_name"],
-                sku=item.get("sku"),
-                type=MovementType.DISPATCHED,
-                quantity=-item["quantity"],
-                reference=sale_in.sale_number,
-                notes=f"Direct sale to {sale_in.client_name or 'Walk-in customer'}"
-            )
-            await movement.create()
+        # Update product status
+        if product.total_stock <= 0:
+            product.status = "out_of_stock"
+        elif product.total_stock <= (product.reorder_point or 0):
+            product.status = "low_stock"
         else:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Product {item['product_name']} (ID: {item['product_id']}) not found"
-            )
+            product.status = "active"
+
+        product.updated_at = datetime.utcnow()
+        await product.save()
+
+        # Create stock movement record
+        movement = StockMovement(
+            organization_id=org_id,
+            product_id=str(product.id),
+            product_name=item["product_name"],
+            sku=item.get("sku") or product.sku,
+            type=MovementType.STOCK_OUT,
+            quantity=-item["quantity"],
+            reference=data["sale_number"],
+            notes=f"POS Sale #{data['sale_number']}",
+            unit_cost=unit_cost,
+            unit_price=item["unit_price"],
+            total_cost=cogs_item,
+            actor_id=str(current_user.id),
+            actor_name=current_user.username or current_user.full_name or "POS Cashier",
+        )
+        await movement.create()
         sale_items.append(SaleItem(**item))
     
     data["items"] = sale_items
+    data["cogs_total"] = total_cogs
+    data["gross_profit"] = data.get("total", 0.0) - total_cogs
+    data["cashier_id"] = str(current_user.id)
+    data["cashier_name"] = current_user.username or current_user.full_name or "POS Cashier"
+
     sale = Sale(**data)
     await sale.create()
     return sale
@@ -254,8 +270,71 @@ async def get_sales_stats(
     }).to_list()
     total_revenue = sum(sale.total for sale in all_sales)
     
+    
     return {
-        "total_sales": total,
-        "completed_sales": completed,
-        "total_revenue": total_revenue
+        "total": total,
+        "completed": completed,
+        "revenue": round(revenue, 2),
+        "avg_order_value": round(avg_order_value, 2)
     }
+
+
+@router.post("/{sale_id}/return", response_model=SaleResponse)
+async def process_sale_return(
+    sale_id: str,
+    reason: Optional[str] = Query("Customer Return"),
+    organization_id: Optional[str] = Depends(deps.get_organization_id),
+    current_user: User = Depends(deps.get_current_active_user),
+) -> Any:
+    """
+    Process a customer sale return, restoring inventory levels and recording stock movement.
+    """
+    query = {"_id": PydanticObjectId(sale_id)}
+    if organization_id:
+        query["organization_id"] = organization_id
+
+    sale = await Sale.find_one(query)
+    if not sale:
+        raise HTTPException(status_code=404, detail="Sale record not found")
+
+    if sale.status == "refunded":
+        raise HTTPException(status_code=400, detail="Sale has already been fully refunded")
+
+    # Restore stock for items
+    for item in sale.items:
+        try:
+            prod_id = PydanticObjectId(item.product_id)
+        except Exception:
+            prod_id = item.product_id
+
+        product = await Product.find_one({"_id": prod_id})
+        if product:
+            product.total_stock += item.quantity
+            if product.total_stock > 0:
+                product.status = "active"
+            product.updated_at = datetime.utcnow()
+            await product.save()
+
+            # Record stock movement for return
+            movement = StockMovement(
+                organization_id=sale.organization_id,
+                product_id=str(product.id),
+                product_name=item.product_name,
+                sku=item.sku or product.sku,
+                type=MovementType.STOCK_IN,
+                quantity=item.quantity,
+                reference=sale.sale_number,
+                notes=f"Customer Return: {reason}",
+                unit_cost=item.unit_cost,
+                unit_price=item.unit_price,
+                total_cost=item.cogs,
+                actor_id=str(current_user.id),
+                actor_name=current_user.username or current_user.full_name or "System",
+            )
+            await movement.create()
+
+    sale.status = "refunded"
+    sale.payment_status = "refunded"
+    sale.updated_at = datetime.utcnow()
+    await sale.save()
+    return sale

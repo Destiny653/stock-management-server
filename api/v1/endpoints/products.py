@@ -333,24 +333,52 @@ async def get_aging_products(
     return aging
 
 
-@router.get("/low-stock/", response_model=List[ProductResponse])
-async def get_low_stock_products(
+@router.get("/expiring/", response_model=List[ProductResponse])
+async def get_expiring_products(
+    days_threshold: int = Query(default=90, description="Fetch products expiring within this many days"),
     organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
-    Get products that are at or below their reorder point.
+    Get products expiring within `days_threshold` (e.g., 30, 60, 90 days),
+    sorted by earliest expiry date (FEFO - First Expired, First Out).
     """
+    from datetime import date, timedelta
+    today = date.today()
+    max_expiry = today + timedelta(days=days_threshold)
+    
     query: dict = {
-        "$expr": {
-            "$lte": [
-                {"$sum": "$variants.stock"},
-                "$reorder_point"
-            ]
-        }
+        "expiry_date": {"$ne": None, "$lte": max_expiry}
     }
     if organization_id:
         query["organization_id"] = organization_id
-        
+
     products = await Product.find(query).to_list()
+    # Sort FEFO
+    products.sort(key=lambda p: p.expiry_date if p.expiry_date else date.max)
+
+    # Auto-generate alerts for products expiring within 30 days
+    thirty_days_limit = today + timedelta(days=30)
+    for p in products:
+        if p.expiry_date and p.expiry_date <= thirty_days_limit:
+            p_id_str = str(p.id)
+            org_id = p.organization_id
+            existing = await Alert.find_one({
+                "organization_id": org_id,
+                "product_id": p_id_str,
+                "type": AlertType.EXPIRING,
+                "is_dismissed": False
+            })
+            if not existing:
+                await Alert(
+                    organization_id=org_id,
+                    type=AlertType.EXPIRING,
+                    priority=AlertPriority.HIGH,
+                    title=f"Expiring Item: {p.name}",
+                    message=f"{p.name} expires on {p.expiry_date.strftime('%Y-%m-%d')}. Current stock: {p.total_stock}.",
+                    product_id=p_id_str,
+                    action_url="/Inventory"
+                ).create()
+
     return products
+

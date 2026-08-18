@@ -27,6 +27,11 @@ from models.storefront_order import StorefrontOrder
 
 
 from models.platform_settings import PlatformSettings
+from models.audit_log import AuditLog
+from models.stock_count import StockCount
+from models.customer import Customer
+from models.customer_return import CustomerReturn
+from models.supplier_return import SupplierReturn
 
 # Global database objects
 client = None
@@ -76,5 +81,10 @@ async def init_db():
             ProductReview,
             StorefrontOrder,
             PlatformSettings,
+            AuditLog,
+            StockCount,
+            Customer,
+            CustomerReturn,
+            SupplierReturn,
         ]
     )

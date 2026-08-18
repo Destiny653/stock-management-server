@@ -24,13 +24,23 @@ class ProductStatus(str, Enum):
     DISCONTINUED = "discontinued"
 
 
+class ValuationMethod(str, Enum):
+    FIFO = "fifo"
+    WEIGHTED_AVERAGE = "weighted_average"
+    MOVING_AVERAGE = "moving_average"
+    STANDARD_COST = "standard_cost"
+
+
 class StockRecord(BaseModel):
     warehouse_id: str
     warehouse_name: Optional[str] = None
     stock: int
+    reserved_stock: int = 0
+    damaged_stock: int = 0
 
 
 class ProductVariant(BaseModel):
+    variant_id: Optional[str] = None
     sku: str
     attributes: Dict[str, str]
     unit_price: float
@@ -47,10 +57,25 @@ class ProductVariant(BaseModel):
 class Product(Document):
     organization_id: Annotated[str, Indexed()]
     name: Annotated[str, Indexed()]
+    sku: Optional[Annotated[str, Indexed()]] = None
+    barcode: Optional[Annotated[str, Indexed()]] = None
     category: str = "Other"
+    brand: Optional[str] = None
     description: Optional[str] = None
+    unit_of_measure: str = "pcs"  # pcs, kg, ltr, box, pack, etc.
+    cost_price: float = 0.0
+    selling_price: float = 0.0
+    tax_rate: float = 0.0  # Percentage e.g. 19.5 or 18.0
+    min_stock: Optional[int] = 0
+    max_stock: Optional[int] = None
     reorder_point: Optional[int] = None
     reorder_quantity: Optional[int] = None
+    valuation_method: ValuationMethod = ValuationMethod.WEIGHTED_AVERAGE
+    track_batches: bool = False
+    track_serials: bool = False
+    total_stock: int = 0
+    reserved_stock: int = 0
+    damaged_stock: int = 0
     location_id: Optional[str] = None
     warehouse_id: Optional[str] = None  # Direct warehouse/store reference
     supplier_id: Optional[str] = None
@@ -60,6 +85,7 @@ class Product(Document):
     expiry_date: Optional[date] = None
     last_restocked: Optional[date] = None
     variants: List[ProductVariant] = Field(default_factory=list)
+    warehouse_stocks: List[StockRecord] = Field(default_factory=list)
     is_on_promotion: bool = False
     promotion_start: Optional[datetime] = None
     promotion_end: Optional[datetime] = None

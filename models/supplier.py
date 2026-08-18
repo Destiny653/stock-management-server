@@ -24,13 +24,26 @@ class Supplier(Document):
     organization_id: Annotated[str, Indexed()]
     user_id: Optional[str] = None  # Linked contact person
     name: Annotated[str, Indexed()]
+    contact_person: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    tax_id: Optional[str] = None
     location_id: Optional[str] = None
     payment_terms: PaymentTerms = PaymentTerms.NET_30
+    credit_limit: float = 0.0
+    bank_name: Optional[str] = None
+    account_number: Optional[str] = None
     lead_time_days: Optional[int] = None
     rating: Optional[float] = None
     status: SupplierStatus = SupplierStatus.ACTIVE
-    phone: Optional[str] = None
     notes: Optional[str] = None
+    # Performance analytics
+    avg_lead_time_days: float = 0.0
+    on_time_delivery_pct: float = 100.0
+    total_purchases_count: int = 0
+    total_purchases_value: float = 0.0
+    outstanding_balance: float = 0.0
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
