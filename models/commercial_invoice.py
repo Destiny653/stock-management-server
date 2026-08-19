@@ -25,6 +25,8 @@ class CommercialPaymentStatus(str, Enum):
 
 class InvoiceBillingType(str, Enum):
     ONE_TIME = "ONE_TIME"
+    MONTHLY = "MONTHLY"
+    YEARLY = "YEARLY"
     RECURRING = "RECURRING"
 
 
