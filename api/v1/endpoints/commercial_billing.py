@@ -454,6 +454,31 @@ async def update_invoice_status(
     return invoice
 
 
+@router.delete("/invoices/{invoice_id}")
+async def delete_invoice(
+    invoice_id: str,
+    current_user: User = Depends(deps.get_current_active_user),
+) -> Any:
+    """Delete a commercial invoice."""
+    invoice = await CommercialInvoice.get(PydanticObjectId(invoice_id))
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+
+    await invoice.delete()
+
+    await AuditLog(
+        organization_id=invoice.organization_id or getattr(current_user, "organization_id", "platform") or "platform",
+        user_id=str(current_user.id),
+        user_name=current_user.full_name or current_user.username,
+        action="DELETE_COMMERCIAL_INVOICE",
+        resource_type="CommercialInvoice",
+        resource_id=str(invoice.id),
+        details={"invoice_number": invoice.invoice_number, "customer": invoice.customer_name},
+    ).create()
+
+    return {"status": "success", "message": "Invoice deleted"}
+
+
 # ─── Payments & Reconciliation Endpoints ──────────────────────────────────────
 @router.get("/payments")
 async def list_payments(
@@ -617,7 +642,7 @@ async def run_recurring_billing(
         await Alert(
             organization_id=contract.organization_id,
             type=AlertType.LOW_STOCK,  # reuse generic alert
-            priority=AlertPriority.INFO,
+            priority=AlertPriority.LOW,
             title=f"Recurring Invoice Generated: {invoice.invoice_number}",
             message=f"Maintenance invoice {invoice.invoice_number} ({contract.maintenance_amount} {contract.currency}) generated for {contract.customer_name}.",
             action_url=f"/commercial-billing",
