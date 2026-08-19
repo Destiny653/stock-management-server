@@ -366,6 +366,7 @@ async def create_invoice(
             product_service_code=it.get("product_service_code"),
             billing_type=it.get("billing_type", InvoiceBillingType.ONE_TIME),
             quantity=qty,
+            show_quantity=bool(it.get("show_quantity", True)),
             unit_price=price,
             discount=disc,
             tax_rate=t_rate,

@@ -36,6 +36,7 @@ class CommercialInvoiceItem(BaseModel):
     product_service_code: Optional[str] = None
     billing_type: InvoiceBillingType = InvoiceBillingType.ONE_TIME
     quantity: float = 1.0
+    show_quantity: bool = True
     unit_price: float = 0.0
     discount: float = 0.0
     tax_rate: float = 0.0  # Percentage e.g. 19.25

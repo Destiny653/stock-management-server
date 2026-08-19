@@ -9,6 +9,8 @@ from enum import Enum
 
 class CommercialBillingType(str, Enum):
     ONE_TIME = "ONE_TIME"
+    MONTHLY = "MONTHLY"
+    YEARLY = "YEARLY"
     RECURRING = "RECURRING"
 
 
