@@ -32,6 +32,11 @@ from models.stock_count import StockCount
 from models.customer import Customer
 from models.customer_return import CustomerReturn
 from models.supplier_return import SupplierReturn
+from models.service_product import ServiceProduct
+from models.maintenance_contract import MaintenanceContract
+from models.commercial_invoice import CommercialInvoice
+from models.commercial_payment import CommercialPayment
+from models.commercial_billing_settings import CommercialBillingSettings
 
 # Global database objects
 client = None
@@ -86,5 +91,10 @@ async def init_db():
             Customer,
             CustomerReturn,
             SupplierReturn,
+            ServiceProduct,
+            MaintenanceContract,
+            CommercialInvoice,
+            CommercialPayment,
+            CommercialBillingSettings,
         ]
     )

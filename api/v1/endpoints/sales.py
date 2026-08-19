@@ -39,7 +39,7 @@ async def read_sales(
     if payment_method:
         query["payment_method"] = payment_method
     
-    sales = await Sale.find(query).skip(skip).limit(limit).to_list()
+    sales = await Sale.find(query).sort("-created_at").skip(skip).limit(limit).to_list()
     return sales
 
 

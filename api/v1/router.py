@@ -28,10 +28,14 @@ from api.v1.endpoints import (
     bulk_import,
     customers,
     finance,
+    commercial_billing,
 )
 
 
 api_router = APIRouter()
+
+# Commercial Billing
+api_router.include_router(commercial_billing.router, prefix="/commercial-billing", tags=["Commercial Billing"])
 
 # Platform Settings
 api_router.include_router(platform.router, prefix="/platform", tags=["Platform"])
