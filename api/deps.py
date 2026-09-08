@@ -108,7 +108,13 @@ async def get_organization_id(
 
     # Enforce paywall/approval for business-staff requests.
     org = await Organization.get(org_id)
+    if not org:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Organization not found",
+        )
     now = datetime.utcnow()
+
 
     # Approval gate (must be approved by platform-staff before services start)
     if org.status == OrganizationStatus.PENDING:
@@ -197,3 +203,67 @@ async def get_organization_id(
         status_code=status.HTTP_403_FORBIDDEN,
         detail="Organization subscription has expired",
     )
+
+
+async def get_location_scope(
+    location_id: Optional[str] = None,
+    current_user: User = Depends(get_current_active_user),
+) -> Optional[str]:
+    """
+    Validates and returns the scoped location_id.
+
+    Rules:
+    - Platform-staff: no restrictions (pass-through).
+    - Admins / Managers / Inventory Managers / Procurement Officers / Auditors:
+        can access any location within their org (or all locations when location_id is None).
+    - Store Managers / Salespersons / Cashiers:
+        MUST have location_id set; it MUST be in their permitted locations list.
+        They cannot access 'All Locations'.
+    """
+    from models.location import Location
+
+    # Platform staff bypasses location restrictions
+    if current_user.user_type == "platform-staff":
+        return location_id
+
+    # Determine unrestricted roles (can choose any location or "All Locations")
+    unrestricted_roles = {"admin", "administrator", "manager", "inventory_manager",
+                          "procurement_officer", "auditor"}
+    role_val = current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
+
+    if role_val in unrestricted_roles:
+        # Validate location belongs to their org if provided
+        if location_id:
+            try:
+                from beanie import PydanticObjectId
+                loc = await Location.find_one({
+                    "_id": PydanticObjectId(location_id),
+                    "organization_id": current_user.organization_id
+                })
+                if not loc:
+                    raise HTTPException(status_code=403, detail="Location not found in your organization")
+            except Exception as e:
+                if isinstance(e, HTTPException):
+                    raise
+        return location_id
+
+    # Restricted roles: must be assigned to a location
+    permitted = set(current_user.location_access or []) | set(current_user.warehouse_access or [])
+
+    if not location_id:
+        # Restricted users CANNOT use "All Locations" – default to first permitted location
+        if permitted:
+            return next(iter(permitted))
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You must be assigned to a location to access this resource",
+        )
+
+    if location_id not in permitted:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to access this location",
+        )
+
+    return location_id
+

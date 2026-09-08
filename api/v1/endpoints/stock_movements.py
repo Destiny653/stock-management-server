@@ -22,11 +22,13 @@ async def read_stock_movements(
     sort: Optional[str] = None,
     product_id: Optional[str] = None,
     movement_type: Optional[str] = None,
+    location_id: Optional[str] = None,
     organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
     Retrieve stock movements. Filtered by organization for non-superadmins.
+    Optionally scoped to a specific location (matches from_location_id or to_location_id).
     """
     query = {}
     if organization_id:
@@ -36,6 +38,12 @@ async def read_stock_movements(
         query["product_id"] = product_id
     if movement_type:
         query["type"] = movement_type
+    if location_id:
+        # Filter movements that involve this location as source or destination
+        query["$or"] = [
+            {"from_location_id": location_id},
+            {"to_location_id": location_id},
+        ]
     
     q = StockMovement.find(query)
     if sort:

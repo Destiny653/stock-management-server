@@ -29,12 +29,11 @@ async def get_storefront_config(
         raise HTTPException(status_code=400, detail="No organization associated with user")
 
     config = await StorefrontConfig.find_one({"organization_id": org_id})
-    if not config:
-        return None
-
-    # Inject platform-level allowed payment methods so the frontend can filter options
     platform_settings = await PlatformSettings.find_one()
     platform_allowed = platform_settings.allowed_payment_methods if platform_settings else ["mtn", "orange", "stripe"]
+
+    if not config:
+        return {"platform_allowed_payment_methods": platform_allowed}
 
     # Use model_dump_json to safely serialize ObjectId/_id fields, then parse back to dict
     config_dict = json.loads(config.model_dump_json())
@@ -108,8 +107,9 @@ async def update_storefront_config(
                 raise HTTPException(status_code=400, detail="This slug is already taken")
 
         await config.update({"$set": update_data})
-        await config.save()
-        return config
+        # Fetch the updated config to return the latest state
+        updated_config = await StorefrontConfig.get(config.id)
+        return updated_config
     else:
         # Create new
         data = config_in.model_dump(exclude_unset=True)

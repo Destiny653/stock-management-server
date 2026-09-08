@@ -37,6 +37,9 @@ from models.maintenance_contract import MaintenanceContract
 from models.commercial_invoice import CommercialInvoice
 from models.commercial_payment import CommercialPayment
 from models.commercial_billing_settings import CommercialBillingSettings
+from models.location_stock import LocationStock
+from models.pos_terminal import POSTerminal
+from models.stock_transfer import StockTransfer
 
 # Global database objects
 client = None
@@ -96,5 +99,8 @@ async def init_db():
             CommercialInvoice,
             CommercialPayment,
             CommercialBillingSettings,
+            LocationStock,
+            POSTerminal,
+            StockTransfer,
         ]
     )

@@ -22,6 +22,11 @@ class MovementType(str, Enum):
     RESERVATION = "reservation"
     OPENING_STOCK = "opening_stock"
     CLOSING_STOCK = "closing_stock"
+    POS_SALE = "pos_sale"
+    TRANSFER_DISPATCH = "transfer_dispatch"
+    TRANSFER_RECEIPT = "transfer_receipt"
+    TRANSFER_DAMAGED = "transfer_damaged"
+    PO_RECEIVED = "po_received"
 
 
 class StockMovement(Document):
@@ -36,6 +41,9 @@ class StockMovement(Document):
     after_quantity: int = 0
     from_location: Optional[str] = None
     to_location: Optional[str] = None
+    from_location_id: Optional[str] = None
+    to_location_id: Optional[str] = None
+    pos_terminal_id: Optional[str] = None
     reference: Optional[str] = None  # PO number, Sale receipt, or transfer ID
     notes: Optional[str] = None
     batch_number: Optional[str] = None

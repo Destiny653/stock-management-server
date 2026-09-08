@@ -65,7 +65,9 @@ class User(Document):
     role: UserRole = UserRole.USER
     user_type: UserType = UserType.BUSINESS_STAFF
     permissions: List[Privilege] = []
-    warehouse_access: List[str] = []  # IDs of warehouses user can access
+    warehouse_access: List[str] = []  # Legacy: IDs of warehouses user can access
+    location_access: List[str] = []   # Unified: IDs of locations (stores + warehouses) user can access
+
     status: UserStatus = UserStatus.PENDING
     is_active: bool = True
     last_login: Optional[datetime] = None

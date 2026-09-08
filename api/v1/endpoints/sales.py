@@ -22,11 +22,13 @@ async def read_sales(
     status: Optional[str] = None,
     vendor_id: Optional[str] = None,
     payment_method: Optional[str] = None,
+    location_id: Optional[str] = None,
     organization_id: Optional[str] = Depends(deps.get_organization_id),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
     Retrieve sales. Filtered by organization for non-superadmins.
+    Optionally scoped to a specific store location via location_id.
     """
     query = {}
     if organization_id:
@@ -38,6 +40,19 @@ async def read_sales(
         query["vendor_id"] = vendor_id
     if payment_method:
         query["payment_method"] = payment_method
+    if location_id:
+        query["location_id"] = location_id
+    
+    # Enforce location access for restricted roles
+    role_val = current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
+    restricted_roles = {"store_manager", "salesperson", "cashier"}
+    if role_val in restricted_roles:
+        permitted = set(current_user.location_access or []) | set(current_user.warehouse_access or [])
+        if location_id and location_id not in permitted:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=403, detail="You do not have permission to access this location's sales")
+        elif not location_id and permitted:
+            query["location_id"] = {"$in": list(permitted)}
     
     sales = await Sale.find(query).sort("-created_at").skip(skip).limit(limit).to_list()
     return sales
@@ -142,14 +157,31 @@ async def create_sale(
         product.updated_at = datetime.utcnow()
         await product.save()
 
+        # Update LocationStock for parent Store if store_id or location_id is supplied
+        store_id = data.get("store_id") or data.get("location_id")
+        if store_id:
+            from models.location_stock import LocationStock
+            loc_stock = await LocationStock.find_one({
+                "organization_id": org_id,
+                "location_id": store_id,
+                "product_id": str(product.id)
+            })
+            if loc_stock:
+                loc_stock.available = max(0, loc_stock.available - item["quantity"])
+                loc_stock.on_hand = max(0, loc_stock.on_hand - item["quantity"])
+                loc_stock.updated_at = datetime.utcnow()
+                await loc_stock.save()
+
         # Create stock movement record
         movement = StockMovement(
             organization_id=org_id,
             product_id=str(product.id),
             product_name=item["product_name"],
             sku=item.get("sku") or product.sku,
-            type=MovementType.STOCK_OUT,
+            type=MovementType.POS_SALE,
             quantity=-item["quantity"],
+            from_location_id=store_id,
+            pos_terminal_id=data.get("pos_terminal_id"),
             reference=data["sale_number"],
             notes=f"POS Sale #{data['sale_number']}",
             unit_cost=unit_cost,

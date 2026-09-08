@@ -90,9 +90,10 @@ class StorefrontConfig(Document):
     show_prices: bool = True
     show_stock: bool = False
 
-    # Curated content
+    # Curated content & exclusions
     featured_category_ids: List[str] = Field(default_factory=list)
     featured_product_ids: List[str] = Field(default_factory=list)
+    excluded_category_names: List[str] = Field(default_factory=list)
 
     # Contact
     contact_email: Optional[str] = None

@@ -68,6 +68,9 @@ async def get_storefront_products(
 
     query: dict = {"organization_id": org_id, "status": {"$ne": "discontinued"}}
 
+    if config.excluded_category_names:
+        query["category"] = {"$nin": config.excluded_category_names}
+
     if search:
         query["$or"] = [
             {"name": {"$regex": search, "$options": "i"}},
@@ -264,8 +267,12 @@ async def get_storefront_categories(slug: str) -> Any:
     config = await _get_config_by_slug(slug)
     categories = await Category.find({"organization_id": config.organization_id}).to_list()
 
+    excluded = set(config.excluded_category_names or [])
+
     result = []
     for cat in categories:
+        if cat.name in excluded:
+            continue
         # Count products in category
         count = await Product.find({
             "organization_id": config.organization_id,
@@ -458,7 +465,7 @@ async def submit_order(slug: str, order_in: StorefrontOrderCreate) -> Any:
             priority=AlertPriority.HIGH,
             title="New Storefront Order",
             message=f"A new order {order_ref} was placed by {order_in.customer_name} for a total of {total} {config.currency or 'XAF'}.",
-            action_url=f"/storefront-settings?tab=orders"
+            action_url=f"/orders?ref={order_ref}"
         )
         await alert.create()
     except Exception as e:

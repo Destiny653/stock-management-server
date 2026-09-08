@@ -29,10 +29,14 @@ from api.v1.endpoints import (
     customers,
     finance,
     commercial_billing,
+    stock_transfers,
 )
 
 
 api_router = APIRouter()
+
+# Stock Transfers (6-Stage Lifecycle)
+api_router.include_router(stock_transfers.router, prefix="/stock-transfers", tags=["Stock Transfers"])
 
 # Commercial Billing
 api_router.include_router(commercial_billing.router, prefix="/commercial-billing", tags=["Commercial Billing"])
