@@ -182,6 +182,10 @@ async def get_organization_id(
             return org_id
         subscription_expiry = next_billing_date
 
+    # If the organization is explicitly ACTIVE (enabled/approved by platform admin), grant access
+    if org.status == OrganizationStatus.ACTIVE:
+        return org_id
+
     # Expired (trial + subscription). Mark suspended to keep everything in sync.
     if org.status != OrganizationStatus.SUSPENDED:
         org.status = OrganizationStatus.SUSPENDED

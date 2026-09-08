@@ -256,6 +256,12 @@ async def update_organization(
     if update_data.get("billing_cycle") and not update_data.get("subscription_interval"):
         update_data["subscription_interval"] = update_data["billing_cycle"]
 
+    # When enabling an org (setting to ACTIVE), ensure trial_ends_at is in the future
+    if update_data.get("status") in (OrganizationStatus.ACTIVE, "active"):
+        current_trial = update_data.get("trial_ends_at") or organization.trial_ends_at
+        if not current_trial or current_trial < datetime.utcnow():
+            update_data["trial_ends_at"] = datetime.utcnow() + timedelta(days=30)
+
     await organization.update({"$set": update_data})
     await organization.save()
     return organization
@@ -274,6 +280,8 @@ async def approve_organization(
         raise HTTPException(status_code=404, detail="Organization not found")
 
     organization.status = OrganizationStatus.ACTIVE
+    if not organization.trial_ends_at or organization.trial_ends_at < datetime.utcnow():
+        organization.trial_ends_at = datetime.utcnow() + timedelta(days=30)
     organization.updated_at = datetime.utcnow()
     await organization.save()
 

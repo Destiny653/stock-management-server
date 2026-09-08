@@ -32,6 +32,14 @@ async def get_locations(
     
     # If no locations exist yet, auto-seed default Store & Warehouse from existing legacy data
     if not locations and current_user.organization_id:
+        from models.organization import Organization
+        org = await Organization.get(current_user.organization_id)
+        org_city = (org and org.city) or "Douala"
+        org_country = (org and org.country) or "Cameroon"
+        org_phone = (org and org.phone) or None
+        org_email = (org and org.email) or None
+        org_name = (org and org.name) or None
+
         # Check existing warehouses
         warehouses = await Warehouse.find({"organization_id": current_user.organization_id}).to_list()
         if warehouses:
@@ -43,8 +51,10 @@ async def get_locations(
                     type=LocationType.WAREHOUSE,
                     status=LocationStatus.ACTIVE,
                     address="",
-                    city="Douala",
-                    country="Cameroon",
+                    city=org_city,
+                    country=org_country,
+                    phone=org_phone,
+                    email=org_email,
                     is_central_hub=w.is_central_hub
                 )
                 await loc.insert()
@@ -52,24 +62,32 @@ async def get_locations(
         else:
             main_warehouse = Location(
                 organization_id=current_user.organization_id,
-                name="Main Central Warehouse",
+                name=f"{org_name} Central Warehouse" if org_name else "Main Central Warehouse",
                 code="WH-MAIN",
                 type=LocationType.WAREHOUSE,
                 status=LocationStatus.ACTIVE,
                 address="Central Industrial Zone",
-                city="Douala",
-                country="Cameroon",
+                city=org_city,
+                country=org_country,
+                phone=org_phone,
+                email=org_email,
+                latitude=4.0511,
+                longitude=9.7679,
                 is_central_hub=True
             )
             main_store = Location(
                 organization_id=current_user.organization_id,
-                name="Primary Retail Store",
+                name=f"{org_name} Store" if org_name else "Primary Retail Store",
                 code="STR-01",
                 type=LocationType.STORE,
                 status=LocationStatus.ACTIVE,
                 address="Commercial Avenue",
-                city="Douala",
-                country="Cameroon",
+                city=org_city,
+                country=org_country,
+                phone=org_phone,
+                email=org_email,
+                latitude=4.0550,
+                longitude=9.7700,
                 allow_pos=True
             )
             await main_warehouse.insert()
@@ -127,6 +145,8 @@ async def create_location(
         country=data.get("country", "Cameroon"),
         phone=data.get("phone"),
         email=data.get("email"),
+        latitude=data.get("latitude"),
+        longitude=data.get("longitude"),
         manager_id=data.get("manager_id"),
         manager_name=data.get("manager_name"),
         is_central_hub=bool(data.get("is_central_hub", False)),
@@ -264,21 +284,27 @@ async def update_location(
     current_user: User = Depends(get_current_user)
 ) -> Any:
     """Edit an existing location's details."""
-    if current_user.role.value not in ["admin", "superadmin", "owner", "manager"]:
+    role_val = current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
+    if current_user.user_type != "platform-staff" and role_val not in ["admin", "superadmin", "administrator", "owner", "manager"]:
         raise HTTPException(status_code=403, detail="Insufficient permission to edit locations")
 
-    try:
-        obj_id = PydanticObjectId(location_id)
-        loc = await Location.find_one({"_id": obj_id, "organization_id": current_user.organization_id})
-    except Exception:
-        loc = None
+    loc = await Location.get(location_id)
+    if not loc:
+        try:
+            loc = await Location.find_one({"_id": PydanticObjectId(location_id)})
+        except Exception:
+            pass
 
     if not loc:
         raise HTTPException(status_code=404, detail="Location not found")
 
+    if current_user.user_type != "platform-staff" and loc.organization_id != current_user.organization_id:
+        raise HTTPException(status_code=403, detail="Not authorized to edit this location")
+
     # Allowed fields to update
     updatable = ["name", "code", "address", "city", "state", "postal_code", "country",
-                 "phone", "email", "manager_id", "manager_name", "is_central_hub", "allow_pos", "type"]
+                 "phone", "email", "manager_id", "manager_name", "is_central_hub", "allow_pos", "type",
+                 "latitude", "longitude"]
     for field in updatable:
         if field in data:
             if field == "type":
@@ -304,14 +330,16 @@ async def update_location_status(
     current_user: User = Depends(get_current_user)
 ) -> Any:
     """Activate or deactivate a location."""
-    if current_user.role.value not in ["admin", "superadmin", "owner", "manager"]:
+    role_val = current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
+    if current_user.user_type != "platform-staff" and role_val not in ["admin", "superadmin", "administrator", "owner", "manager"]:
         raise HTTPException(status_code=403, detail="Insufficient permission to change location status")
 
-    try:
-        obj_id = PydanticObjectId(location_id)
-        loc = await Location.find_one({"_id": obj_id, "organization_id": current_user.organization_id})
-    except Exception:
-        loc = None
+    loc = await Location.get(location_id)
+    if not loc:
+        try:
+            loc = await Location.find_one({"_id": PydanticObjectId(location_id)})
+        except Exception:
+            pass
 
     if not loc:
         raise HTTPException(status_code=404, detail="Location not found")
@@ -336,14 +364,16 @@ async def delete_location(
     current_user: User = Depends(get_current_user)
 ) -> Any:
     """Soft-delete a location by marking it inactive."""
-    if current_user.role.value not in ["admin", "superadmin", "owner"]:
+    role_val = current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
+    if current_user.user_type != "platform-staff" and role_val not in ["admin", "superadmin", "administrator", "owner"]:
         raise HTTPException(status_code=403, detail="Only administrators can delete locations")
 
-    try:
-        obj_id = PydanticObjectId(location_id)
-        loc = await Location.find_one({"_id": obj_id, "organization_id": current_user.organization_id})
-    except Exception:
-        loc = None
+    loc = await Location.get(location_id)
+    if not loc:
+        try:
+            loc = await Location.find_one({"_id": PydanticObjectId(location_id)})
+        except Exception:
+            pass
 
     if not loc:
         raise HTTPException(status_code=404, detail="Location not found")
