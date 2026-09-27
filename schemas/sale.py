@@ -2,7 +2,7 @@
 from typing import Optional, List
 from datetime import datetime
 from pydantic import BaseModel
-from models.sale import PaymentMethod, SaleStatus
+from models.sale import PaymentMethod, PaymentStatus, SaleStatus
 
 
 class SaleItemCreate(BaseModel):
@@ -36,7 +36,10 @@ class SaleBase(BaseModel):
     tax: float = 0.0
     discount: float = 0.0
     total: float = 0.0
+    amount_paid: float = 0.0
+    amount_due: float = 0.0
     payment_method: PaymentMethod = PaymentMethod.CASH
+    payment_status: PaymentStatus = PaymentStatus.PAID
     status: SaleStatus = SaleStatus.COMPLETED
     notes: Optional[str] = None
     location: Optional[str] = None
