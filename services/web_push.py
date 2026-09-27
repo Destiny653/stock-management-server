@@ -164,6 +164,7 @@ async def send_store_push(
     url: str,
     tag: Optional[str] = None,
     icon: Optional[str] = None,
+    image: Optional[str] = None,
 ) -> dict[str, Any]:
     """Send a Web Push notification to all subscribers of a store organization."""
     from models.store_push_subscription import StorePushSubscription
@@ -179,7 +180,8 @@ async def send_store_push(
             "body": body,
             "url": url,
             "tag": tag or "store-update",
-            "icon": icon or "/icons/icon.svg",
+            "icon": icon or image or "/icons/icon.svg",
+            "image": image,
         }
     ).encode("utf-8")
 
@@ -206,7 +208,60 @@ async def send_store_push(
     return {"sent": sent, "failed": failed}
 
 
-async def notify_new_arrival(organization_id: str, product_name: str, product_id: str) -> None:
+def _abs_url(path: Optional[str], base: str) -> Optional[str]:
+    if not path:
+        return None
+    p = str(path).strip()
+    if not p:
+        return None
+    if p.startswith("http://") or p.startswith("https://") or p.startswith("data:"):
+        return p
+    if not base:
+        return None
+    return f"{base.rstrip('/')}{p if p.startswith('/') else '/' + p}"
+
+
+def _product_price_bits(product: Any) -> tuple[Optional[float], Optional[float]]:
+    """Return (display_price, original_price) from variants / promotion."""
+    variants = getattr(product, "variants", None) or []
+    if not variants:
+        return None, None
+    on_promo = bool(getattr(product, "is_on_promotion", False))
+    display = []
+    originals = []
+    for v in variants:
+        unit = float(getattr(v, "unit_price", 0) or 0)
+        originals.append(unit)
+        promo = getattr(v, "promotion_price", None)
+        if on_promo and promo is not None:
+            display.append(float(promo))
+        else:
+            display.append(unit)
+    if not display:
+        return None, None
+    low = min(display)
+    orig = min(originals) if originals else low
+    return low, orig if orig > low else None
+
+
+def _format_money(amount: float, currency: str) -> str:
+    # Compact for notification body (e.g. 12 500 CFAF)
+    if amount >= 1000 and amount == int(amount):
+        formatted = f"{int(amount):,}".replace(",", " ")
+    else:
+        formatted = f"{amount:,.2f}".rstrip("0").rstrip(".")
+    return f"{formatted} {currency}".strip()
+
+
+async def notify_new_arrival(
+    organization_id: str,
+    product_name: str,
+    product_id: str,
+    *,
+    image_url: Optional[str] = None,
+    price: Optional[float] = None,
+    currency: Optional[str] = None,
+) -> None:
     from models.storefront_config import StorefrontConfig
 
     config = await StorefrontConfig.find_one({"organization_id": organization_id})
@@ -215,17 +270,32 @@ async def notify_new_arrival(organization_id: str, product_name: str, product_id
     slug = config.slug
     base = (settings.FRONTEND_URL or "").rstrip("/")
     url = f"{base}/store/{slug}/products/{product_id}"
+    cur = currency or config.currency or "CFAF"
+    body = f"Just arrived: {product_name}"
+    if price is not None:
+        body = f"{product_name} — {_format_money(price, cur)}"
+    image = _abs_url(image_url, base)
     await send_store_push(
         organization_id=organization_id,
         title=f"New at {config.store_name or 'our store'}",
-        body=f"Just arrived: {product_name}",
+        body=body,
         url=url,
         tag=f"new-{product_id}",
         icon=f"{base}/store/{slug}/icon" if base else None,
+        image=image,
     )
 
 
-async def notify_promotion(organization_id: str, product_name: str, product_id: str) -> None:
+async def notify_promotion(
+    organization_id: str,
+    product_name: str,
+    product_id: str,
+    *,
+    image_url: Optional[str] = None,
+    price: Optional[float] = None,
+    original_price: Optional[float] = None,
+    currency: Optional[str] = None,
+) -> None:
     from models.storefront_config import StorefrontConfig
 
     config = await StorefrontConfig.find_one({"organization_id": organization_id})
@@ -234,11 +304,20 @@ async def notify_promotion(organization_id: str, product_name: str, product_id: 
     slug = config.slug
     base = (settings.FRONTEND_URL or "").rstrip("/")
     url = f"{base}/store/{slug}/products/{product_id}"
+    cur = currency or config.currency or "CFAF"
+    if price is not None and original_price is not None and original_price > price:
+        body = f"{product_name} — {_format_money(price, cur)} (was {_format_money(original_price, cur)})"
+    elif price is not None:
+        body = f"On sale: {product_name} — {_format_money(price, cur)}"
+    else:
+        body = f"On sale now: {product_name}"
+    image = _abs_url(image_url, base)
     await send_store_push(
         organization_id=organization_id,
         title=f"Promotion at {config.store_name or 'our store'}",
-        body=f"On sale now: {product_name}",
+        body=body,
         url=url,
         tag=f"promo-{product_id}",
         icon=f"{base}/store/{slug}/icon" if base else None,
+        image=image,
     )

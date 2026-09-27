@@ -132,14 +132,20 @@ async def create_product(
     # Notify installed PWA shoppers about new arrivals (best-effort)
     try:
         import asyncio
-        from services.web_push import notify_new_arrival
+        from services.web_push import notify_new_arrival, _product_price_bits
 
         for product in created_products:
-            # Skip discontinued / empty names
             if not product.name:
                 continue
+            price, _ = _product_price_bits(product)
             asyncio.create_task(
-                notify_new_arrival(organization_id, product.name, str(product.id))
+                notify_new_arrival(
+                    organization_id,
+                    product.name,
+                    str(product.id),
+                    image_url=getattr(product, "image_url", None),
+                    price=price,
+                )
             )
     except Exception as e:
         print(f"Failed to queue new-arrival push: {e}")
@@ -283,10 +289,18 @@ async def update_product(
     if now_on_promo and not was_on_promo:
         try:
             import asyncio
-            from services.web_push import notify_promotion
+            from services.web_push import notify_promotion, _product_price_bits
 
+            price, original = _product_price_bits(product)
             asyncio.create_task(
-                notify_promotion(product.organization_id, product.name, str(product.id))
+                notify_promotion(
+                    product.organization_id,
+                    product.name,
+                    str(product.id),
+                    image_url=getattr(product, "image_url", None),
+                    price=price,
+                    original_price=original,
+                )
             )
         except Exception as e:
             print(f"Failed to queue promotion push: {e}")
