@@ -40,6 +40,7 @@ from models.commercial_billing_settings import CommercialBillingSettings
 from models.location_stock import LocationStock
 from models.pos_terminal import POSTerminal
 from models.stock_transfer import StockTransfer
+from models.store_push_subscription import StorePushSubscription
 
 # Global database objects
 client = None
@@ -102,5 +103,6 @@ async def init_db():
             LocationStock,
             POSTerminal,
             StockTransfer,
+            StorePushSubscription,
         ]
     )

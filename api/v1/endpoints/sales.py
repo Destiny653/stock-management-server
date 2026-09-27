@@ -246,15 +246,34 @@ async def update_sale(
     # Prevent organization_id update
     if "organization_id" in update_data:
         del update_data["organization_id"]
+
+    # Sync client_* aliases
+    if update_data.get("client_name") and not update_data.get("customer_name"):
+        update_data["customer_name"] = update_data["client_name"]
+    if update_data.get("client_email") is not None and "customer_email" not in update_data:
+        update_data["customer_email"] = update_data.get("client_email")
+    if update_data.get("client_phone") is not None and "customer_phone" not in update_data:
+        update_data["customer_phone"] = update_data.get("client_phone")
+
+    # Keep paid amounts consistent with payment_status when provided
+    if "payment_status" in update_data:
+        total = float(update_data.get("total", sale.total or 0))
+        status_val = update_data["payment_status"]
+        status_str = status_val.value if hasattr(status_val, "value") else str(status_val)
+        if status_str == "paid":
+            update_data.setdefault("amount_paid", total)
+            update_data.setdefault("amount_due", 0.0)
+        elif status_str == "unpaid":
+            update_data.setdefault("amount_paid", 0.0)
+            update_data.setdefault("amount_due", total)
         
     # Convert items if present
-    if "items" in update_data and update_data["items"]:
+    if "items" in update_data and update_data["items"] is not None:
         update_data["items"] = [SaleItem(**item) for item in update_data["items"]]
     
     update_data["updated_at"] = datetime.utcnow()
     await sale.update({"$set": update_data})
-    await sale.save()
-    return sale
+    return await Sale.get(sale.id)
 
 
 @router.delete("/{sale_id}", response_model=SaleResponse)

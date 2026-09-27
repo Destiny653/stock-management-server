@@ -30,7 +30,6 @@ async def get_platform_settings() -> Any:
             "allowed_payment_methods": [
                 "mtn",
                 "orange",
-                "stripe",
             ],
         }
     return settings
@@ -59,7 +58,10 @@ async def update_platform_settings(
     if settings_in.default_hero_image is not None:
         settings.default_hero_image = settings_in.default_hero_image
     if settings_in.allowed_payment_methods is not None:
-        settings.allowed_payment_methods = settings_in.allowed_payment_methods
+        # Stripe temporarily disabled — strip from persisted platform settings
+        settings.allowed_payment_methods = [
+            m for m in settings_in.allowed_payment_methods if m != "stripe"
+        ]
         
     await settings.save()
     return settings

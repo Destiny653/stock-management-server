@@ -72,6 +72,8 @@ class Sale(Document):
     status: SaleStatus = SaleStatus.COMPLETED
     receipt_url: Optional[str] = None
     notes: Optional[str] = None
+    due_date: Optional[datetime] = None
+    billing_address: Optional[str] = None
     cashier_id: Optional[str] = None
     cashier_name: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)

@@ -55,6 +55,11 @@ class Settings(BaseSettings):
     PAYUNIT_RETURN_URL: str = "https://inventory-pi-teal.vercel.app/register/success"
     PAYUNIT_NOTIFY_URL: str = ""  # Must be HTTPS; set via env var
 
+    # Web Push (VAPID) — optional; auto-generated to .vapid_keys.json if unset
+    VAPID_PUBLIC_KEY: str = ""
+    VAPID_PRIVATE_KEY: str = ""
+    VAPID_SUBJECT: str = "mailto:support@stockflow.com"
+
     class Config:
         case_sensitive = True
         env_file = ".env"

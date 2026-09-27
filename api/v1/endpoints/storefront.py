@@ -135,7 +135,16 @@ async def get_storefront_products(
         fetch_skip = 0
         fetch_limit = min(max(limit + skip, limit * 2), 48)
 
-    products = await Product.find(query).skip(fetch_skip).limit(fetch_limit).to_list()
+    find_q = Product.find(query)
+    # Push simple sorts to Mongo so skip/limit return the right page without loading extras
+    if sort == "newest":
+        find_q = find_q.sort("-created_at")
+    elif sort == "name_asc":
+        find_q = find_q.sort("+name")
+    elif sort == "name_desc":
+        find_q = find_q.sort("-name")
+
+    products = await find_q.skip(fetch_skip).limit(fetch_limit).to_list()
 
     # Price filtering (post-query since price is in variants)
     if min_price is not None or max_price is not None:
@@ -151,39 +160,39 @@ async def get_storefront_products(
             filtered.append(p)
         products = filtered
 
-    # Sorting (pre-review sorts)
+    # In-memory sorts that depend on variant prices / featured order
     if sort == "price_asc":
         products.sort(key=lambda p: min((v.unit_price for v in p.variants), default=0))
     elif sort == "price_desc":
         products.sort(key=lambda p: min((v.unit_price for v in p.variants), default=0), reverse=True)
-    elif sort == "name_asc":
-        products.sort(key=lambda p: p.name.lower())
-    elif sort == "name_desc":
-        products.sort(key=lambda p: p.name.lower(), reverse=True)
-    elif sort == "newest":
-        products.sort(key=lambda p: p.created_at, reverse=True)
     elif sort == "featured":
         featured_ids = config.featured_product_ids or []
         products.sort(key=lambda p: (0 if str(p.id) in featured_ids else 1, p.created_at), reverse=False)
 
-    # Batch-load reviews once (was N+1 per product — main latency cause)
+    # Aggregate ratings in one query (avoid loading every review document)
     product_ids = [str(p.id) for p in products]
     rating_map: dict[str, tuple[float, int]] = {pid: (0.0, 0) for pid in product_ids}
     if product_ids:
-        all_reviews = await ProductReview.find(
-            {"product_id": {"$in": product_ids}, "is_approved": True}
-        ).to_list()
-        buckets: dict[str, list[int]] = {}
-        for r in all_reviews:
-            buckets.setdefault(r.product_id, []).append(r.rating)
-        for pid, ratings in buckets.items():
-            rating_map[pid] = (round(sum(ratings) / len(ratings), 1), len(ratings))
-
-    # Location maps (single query each)
-    warehouses = await Warehouse.find({"organization_id": org_id}).to_list()
-    locations = await Location.find({"organization_id": org_id}).to_list()
-    warehouse_map = {str(w.id): w.name for w in warehouses}
-    location_map = {str(l.id): l.name for l in locations}
+        rating_rows = await ProductReview.aggregate([
+            {
+                "$match": {
+                    "product_id": {"$in": product_ids},
+                    "is_approved": True,
+                }
+            },
+            {
+                "$group": {
+                    "_id": "$product_id",
+                    "avg": {"$avg": "$rating"},
+                    "count": {"$sum": 1},
+                }
+            },
+        ]).to_list()
+        for row in rating_rows:
+            pid = row.get("_id")
+            if not pid:
+                continue
+            rating_map[pid] = (round(float(row.get("avg") or 0), 1), int(row.get("count") or 0))
 
     result = []
     now = datetime.utcnow()
@@ -199,9 +208,18 @@ async def get_storefront_products(
 
         original_price = min((v.unit_price for v in p.variants), default=0) if p.variants else 0
 
+        # Slim variant payload for list cards (omit cost, warehouse_stocks, etc.)
         variants_dump = []
         for v in p.variants:
-            vdump = v.model_dump()
+            unit_price = v.unit_price
+            vdump = {
+                "variant_id": v.variant_id,
+                "sku": v.sku,
+                "attributes": v.attributes,
+                "unit_price": unit_price,
+                "stock": v.stock,
+                "image_url": v.image_url,
+            }
             if is_promo_active and getattr(v, "promotion_price", None) is not None:
                 vdump["original_price"] = v.unit_price
                 vdump["unit_price"] = v.promotion_price
@@ -210,17 +228,15 @@ async def get_storefront_products(
         lowest_price = min((v["unit_price"] for v in variants_dump), default=0) if variants_dump else 0
         avg_rating, review_count = rating_map.get(str(p.id), (0.0, 0))
 
-        location_name = None
-        if getattr(p, "warehouse_id", None) and p.warehouse_id in warehouse_map:
-            location_name = warehouse_map[p.warehouse_id]
-        elif getattr(p, "location_id", None) and p.location_id in location_map:
-            location_name = location_map[p.location_id]
+        desc = (p.description or "").strip()
+        if len(desc) > 180:
+            desc = desc[:180] + "…"
 
         result.append({
             "id": str(p.id),
             "name": p.name,
             "category": p.category,
-            "description": p.description,
+            "description": desc or None,
             "image_url": p.image_url,
             "status": p.status,
             "variants": variants_dump,
@@ -229,7 +245,6 @@ async def get_storefront_products(
             "lowest_price": lowest_price,
             "avg_rating": avg_rating,
             "review_count": review_count,
-            "location_name": location_name,
             "created_at": p.created_at.isoformat(),
         })
 
@@ -325,40 +340,32 @@ async def get_storefront_categories(slug: str) -> Any:
 
     excluded = set(config.excluded_category_names or [])
 
+    # Single aggregation for counts — was N+1 product+review loads per category (~30s)
+    count_rows = await Product.aggregate([
+        {
+            "$match": {
+                "organization_id": config.organization_id,
+                "status": {"$ne": "discontinued"},
+            }
+        },
+        {"$group": {"_id": "$category", "count": {"$sum": 1}}},
+    ]).to_list()
+    count_map = {row["_id"]: row["count"] for row in count_rows if row.get("_id")}
+
     result = []
     for cat in categories:
         if cat.name in excluded:
             continue
-        # Count products in category
-        products = await Product.find({
-            "organization_id": config.organization_id,
-            "category": cat.name,
-            "status": {"$ne": "discontinued"},
-        }).to_list()
-        count = len(products)
-
-        # Dynamic average rating from approved reviews on products in this category
-        product_ids = [str(p.id) for p in products]
-        avg_rating = 0.0
-        review_count = 0
-        if product_ids:
-            reviews = await ProductReview.find({
-                "product_id": {"$in": product_ids},
-                "is_approved": True,
-            }).to_list()
-            if reviews:
-                review_count = len(reviews)
-                avg_rating = round(sum(r.rating for r in reviews) / review_count, 1)
-
         result.append({
             "id": str(cat.id),
             "name": cat.name,
             "description": cat.description,
             "color": cat.color,
             "icon": cat.icon,
-            "product_count": count,
-            "avg_rating": avg_rating,
-            "review_count": review_count,
+            "product_count": count_map.get(cat.name, 0),
+            # Ratings come from the products catalog on the client
+            "avg_rating": 0.0,
+            "review_count": 0,
         })
 
     return result
@@ -485,33 +492,11 @@ async def submit_order(slug: str, order_in: StorefrontOrderCreate) -> Any:
         payment_phone = config.payment_phone_orange
         ussd_string = f"#150*1*{config.payment_phone_orange}*{amount_int}#"
     elif payment_method == "stripe":
-        # Stripe integration
-        try:
-            if not config.stripe_charges_enabled or not config.stripe_account_id:
-                raise HTTPException(status_code=400, detail="Storefront is not fully connected to Stripe yet.")
-
-            # Note: amount for Stripe must be in cents/units. 
-            # For XAF (no decimals), int(total) is correct if total is in XAF.
-            # If USD, it should be int(total * 100).
-            currency = config.currency.lower() or "xaf"
-            stripe_amount = amount_int
-            if currency in ["usd", "eur", "gbp"]:
-                stripe_amount = int(total * 100)
-            
-            # 2% application fee for the platform
-            application_fee = int(stripe_amount * 0.02)
-            
-            stripe_res = StripeService.create_payment_intent(
-                amount=stripe_amount,
-                currency=currency,
-                order_id=order_ref,
-                customer_email=order_in.customer_email,
-                stripe_account=config.stripe_account_id,
-                application_fee_amount=application_fee
-            )
-            stripe_client_secret = stripe_res["client_secret"]
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Stripe setup failed: {str(e)}")
+        # Stripe temporarily disabled across the platform
+        raise HTTPException(
+            status_code=400,
+            detail="Card payments (Stripe) are temporarily unavailable. Please use MTN or Orange Money.",
+        )
 
     order = StorefrontOrder(
         organization_id=config.organization_id,
@@ -573,3 +558,60 @@ async def get_customer_orders(
         
     orders = await StorefrontOrder.find(query).sort("-created_at").to_list()
     return orders
+
+
+# ─── Web Push (installed PWA) ───────────────────────────────────────────────
+
+@router.get("/{slug}/push/vapid-key")
+async def get_push_vapid_key(slug: str) -> Any:
+    """Public VAPID key for PushManager.subscribe."""
+    await _get_config_by_slug(slug)
+    from services.web_push import get_vapid_public_key
+
+    return {"public_key": get_vapid_public_key()}
+
+
+@router.post("/{slug}/push/subscribe")
+async def subscribe_store_push(slug: str, body: dict) -> Any:
+    """Save a browser push subscription for this store's PWA."""
+    from models.store_push_subscription import StorePushSubscription, PushSubscriptionKeys
+
+    config = await _get_config_by_slug(slug)
+    endpoint = (body.get("endpoint") or "").strip()
+    keys = body.get("keys") or {}
+    p256dh = (keys.get("p256dh") or "").strip()
+    auth = (keys.get("auth") or "").strip()
+    if not endpoint or not p256dh or not auth:
+        raise HTTPException(status_code=400, detail="Invalid push subscription")
+
+    existing = await StorePushSubscription.find_one({"endpoint": endpoint})
+    if existing:
+        existing.organization_id = config.organization_id
+        existing.store_slug = slug
+        existing.keys = PushSubscriptionKeys(p256dh=p256dh, auth=auth)
+        existing.user_agent = body.get("user_agent")
+        existing.updated_at = datetime.utcnow()
+        await existing.save()
+        return {"ok": True, "id": str(existing.id)}
+
+    sub = StorePushSubscription(
+        organization_id=config.organization_id,
+        store_slug=slug,
+        endpoint=endpoint,
+        keys=PushSubscriptionKeys(p256dh=p256dh, auth=auth),
+        user_agent=body.get("user_agent"),
+    )
+    await sub.create()
+    return {"ok": True, "id": str(sub.id)}
+
+
+@router.delete("/{slug}/push/unsubscribe")
+async def unsubscribe_store_push(slug: str, endpoint: str = Query(...)) -> Any:
+    """Remove a push subscription."""
+    await _get_config_by_slug(slug)
+    from models.store_push_subscription import StorePushSubscription
+
+    sub = await StorePushSubscription.find_one({"endpoint": endpoint, "store_slug": slug})
+    if sub:
+        await sub.delete()
+    return {"ok": True}

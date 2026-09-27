@@ -37,6 +37,9 @@ coverage.xml
 venv/
 ENV/
 
+# Web Push VAPID keys (auto-generated locally)
+.vapid_keys.json
+
 # Environment Variables
 .env
 .env.*

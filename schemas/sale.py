@@ -42,6 +42,8 @@ class SaleBase(BaseModel):
     payment_status: PaymentStatus = PaymentStatus.PAID
     status: SaleStatus = SaleStatus.COMPLETED
     notes: Optional[str] = None
+    due_date: Optional[datetime] = None
+    billing_address: Optional[str] = None
     location: Optional[str] = None
 
 
@@ -56,14 +58,22 @@ class SaleUpdate(BaseModel):
     customer_name: Optional[str] = None
     customer_email: Optional[str] = None
     customer_phone: Optional[str] = None
+    client_name: Optional[str] = None
+    client_email: Optional[str] = None
+    client_phone: Optional[str] = None
     items: Optional[List[SaleItemCreate]] = None
     subtotal: Optional[float] = None
     tax: Optional[float] = None
     discount: Optional[float] = None
     total: Optional[float] = None
+    amount_paid: Optional[float] = None
+    amount_due: Optional[float] = None
     payment_method: Optional[PaymentMethod] = None
+    payment_status: Optional[PaymentStatus] = None
     status: Optional[SaleStatus] = None
     notes: Optional[str] = None
+    due_date: Optional[datetime] = None
+    billing_address: Optional[str] = None
     location: Optional[str] = None
 
 

@@ -128,6 +128,21 @@ async def create_product(
         product = Product(**data)
         await product.create()
         created_products.append(product)
+
+    # Notify installed PWA shoppers about new arrivals (best-effort)
+    try:
+        import asyncio
+        from services.web_push import notify_new_arrival
+
+        for product in created_products:
+            # Skip discontinued / empty names
+            if not product.name:
+                continue
+            asyncio.create_task(
+                notify_new_arrival(organization_id, product.name, str(product.id))
+            )
+    except Exception as e:
+        print(f"Failed to queue new-arrival push: {e}")
     
     # Return single object if input was single, else return list
     return created_products[0] if not isinstance(product_in, list) else created_products
@@ -191,6 +206,8 @@ async def update_product(
     product = await Product.find_one(query)
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
+
+    was_on_promo = bool(getattr(product, "is_on_promotion", False))
     
     update_data = product_in.model_dump(exclude_unset=True)
     
@@ -260,6 +277,20 @@ async def update_product(
         
     product.updated_at = datetime.utcnow()
     await product.save()
+
+    # Notify shoppers when a promotion is newly activated
+    now_on_promo = bool(getattr(product, "is_on_promotion", False))
+    if now_on_promo and not was_on_promo:
+        try:
+            import asyncio
+            from services.web_push import notify_promotion
+
+            asyncio.create_task(
+                notify_promotion(product.organization_id, product.name, str(product.id))
+            )
+        except Exception as e:
+            print(f"Failed to queue promotion push: {e}")
+
     return product
 
 

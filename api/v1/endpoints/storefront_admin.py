@@ -28,7 +28,9 @@ async def get_storefront_config(
 
     config = await StorefrontConfig.find_one({"organization_id": org_id})
     platform_settings = await PlatformSettings.find_one()
-    platform_allowed = platform_settings.allowed_payment_methods if platform_settings else ["mtn", "orange", "stripe"]
+    platform_allowed = platform_settings.allowed_payment_methods if platform_settings else ["mtn", "orange"]
+    # Stripe temporarily disabled platform-wide
+    platform_allowed = [m for m in (platform_allowed or []) if m != "stripe"]
 
     if not config:
         return {"platform_allowed_payment_methods": platform_allowed}
@@ -164,31 +166,10 @@ async def connect_stripe_account(
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """Generate a Stripe Connect onboarding link for the organization."""
-    org_id = current_user.organization_id
-    if not org_id:
-        raise HTTPException(status_code=400, detail="No organization associated with user")
-
-    if current_user.role not in ["admin", "manager"]:
-        raise HTTPException(status_code=403, detail="Only admins/managers can connect Stripe")
-
-    config = await StorefrontConfig.find_one({"organization_id": org_id})
-    if not config:
-        raise HTTPException(status_code=404, detail="Storefront config not found. Please save initial settings first.")
-
-    account_id = config.stripe_account_id
-    if not account_id:
-        try:
-            account_id = StripeService.create_connect_account()
-            config.stripe_account_id = account_id
-            await config.save()
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to create Stripe account: {str(e)}")
-
-    try:
-        link = StripeService.create_account_link(account_id, return_url, refresh_url)
-        return {"url": link, "account_id": account_id}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to generate onboarding link: {str(e)}")
+    raise HTTPException(
+        status_code=503,
+        detail="Stripe Connect is temporarily disabled. Card payments will be available later.",
+    )
 
 
 @router.get("/config/stripe/status")
