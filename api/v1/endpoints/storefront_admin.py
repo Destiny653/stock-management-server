@@ -1,12 +1,10 @@
 """Storefront admin API – authenticated endpoints for org admins to manage their store"""
-import os
-import uuid
 from typing import List, Any, Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 
 from api import deps
-from core.uploads import build_upload_url, get_upload_dir
+from core.uploads import get_upload_dir
 from models.user import User
 from models.platform_settings import PlatformSettings
 from models.storefront_config import StorefrontConfig, ThemeConfig, HeroSlide, SocialLinks
@@ -222,25 +220,25 @@ async def upload_storefront_image(
     file: UploadFile = File(...),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
-    """Upload a storefront image (hero, logo, banner)."""
+    """Upload a storefront image (hero, logo, banner). Accepts HEIC/HEIF."""
     if current_user.role not in ["admin", "manager"]:
         raise HTTPException(status_code=403, detail="Only admins/managers can upload images")
 
-    if not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="File must be an image")
-
-    upload_dir = get_upload_dir("storefront")
-
-    if not file.filename:
-        raise HTTPException(status_code=400, detail="Invalid file name")
-
-    file_extension = os.path.splitext(file.filename)[1]
-    filename = f"{uuid.uuid4()}{file_extension}"
-
+    from core.image_upload import prepare_image_upload
     from core.uploads import upload_to_gridfs
-    file_bytes = await file.read()
-    url = await upload_to_gridfs(file_bytes, filename, bucket_name="storefront", content_type=file.content_type)
 
+    get_upload_dir("storefront")
+
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=400, detail="Empty file")
+
+    prepared_bytes, filename, content_type = prepare_image_upload(
+        file_bytes, file.filename, file.content_type
+    )
+    url = await upload_to_gridfs(
+        prepared_bytes, filename, bucket_name="storefront", content_type=content_type
+    )
     return {"url": url}
 
 

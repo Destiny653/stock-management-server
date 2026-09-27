@@ -1,5 +1,3 @@
-import os
-import uuid
 from typing import List, Any, Optional, Union
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
@@ -21,28 +19,24 @@ async def upload_product_image(
 ) -> Any:
     """
     Upload a product image and return the path.
+    Accepts HEIC/HEIF (iPhone) and converts to JPEG for browser display.
     """
-    # Check if file is an image
-    if not file.content_type or not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="File must be an image")
-    
+    from core.image_upload import prepare_image_upload
+    from core.uploads import upload_to_gridfs
 
     # Create directory if not exists
-    upload_dir = get_upload_dir("products")
-    
-    # Generate unique filename
-    if not file.filename:
-        raise HTTPException(status_code=400, detail="Invalid file name")
-        
-    file_extension = os.path.splitext(file.filename)[1]
-    filename = f"{uuid.uuid4()}{file_extension}"
-    
-    # Save file to GridFS
-    from core.uploads import upload_to_gridfs
+    get_upload_dir("products")
+
     file_bytes = await file.read()
-    url = await upload_to_gridfs(file_bytes, filename, bucket_name="products", content_type=file.content_type)
-    
-    # Return the URL/path
+    if not file_bytes:
+        raise HTTPException(status_code=400, detail="Empty file")
+
+    prepared_bytes, filename, content_type = prepare_image_upload(
+        file_bytes, file.filename, file.content_type
+    )
+    url = await upload_to_gridfs(
+        prepared_bytes, filename, bucket_name="products", content_type=content_type
+    )
     return {"url": url}
 
 

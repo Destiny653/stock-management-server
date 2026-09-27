@@ -74,21 +74,24 @@ async def upload_default_hero(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_active_user)
 ) -> Any:
-    """Upload default platform hero banner (Platform Staff only)."""
+    """Upload default platform hero banner (Platform Staff only). Accepts HEIC/HEIF."""
     if current_user.user_type != "platform-staff":
         raise HTTPException(status_code=403, detail="Not authorized")
-        
-    if not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="File must be an image")
-        
-    if not file.filename:
-        raise HTTPException(status_code=400, detail="Invalid file name")
-        
-    file_extension = os.path.splitext(file.filename)[1]
-    filename = f"default-hero-{uuid.uuid4()}{file_extension}"
-    
+
+    from core.image_upload import prepare_image_upload
+
     file_bytes = await file.read()
-    url = await upload_to_gridfs(file_bytes, filename, bucket_name="storefront", content_type=file.content_type)
+    if not file_bytes:
+        raise HTTPException(status_code=400, detail="Empty file")
+
+    prepared_bytes, filename, content_type = prepare_image_upload(
+        file_bytes, file.filename, file.content_type
+    )
+    # Keep recognizable prefix for platform default hero
+    filename = f"default-hero-{filename}"
+    url = await upload_to_gridfs(
+        prepared_bytes, filename, bucket_name="storefront", content_type=content_type
+    )
     
     # Save directly to platform settings as well
     settings = await PlatformSettings.find_one()
