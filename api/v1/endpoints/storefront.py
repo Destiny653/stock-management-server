@@ -89,7 +89,14 @@ async def get_storefront_products(
         else:
             query.update(location_query)
 
-    products = await Product.find(query).skip(skip).limit(limit).to_list()
+    # For sort modes that need global ranking, pull a wider set then trim after sort
+    fetch_limit = limit
+    fetch_skip = skip
+    if sort in ("best_selling", "featured", "rating"):
+        fetch_skip = 0
+        fetch_limit = max(limit + skip, 120)
+
+    products = await Product.find(query).skip(fetch_skip).limit(fetch_limit).to_list()
 
     # Price filtering (post-query since price is in variants)
     if min_price is not None or max_price is not None:
@@ -187,6 +194,11 @@ async def get_storefront_products(
 
     if sort == "best_selling":
         result.sort(key=lambda x: (x["avg_rating"], x["review_count"]), reverse=True)
+    elif sort == "rating":
+        result.sort(key=lambda x: (x["avg_rating"], x["review_count"]), reverse=True)
+
+    if sort in ("best_selling", "featured", "rating"):
+        result = result[skip : skip + limit]
 
     return {"products": result, "total": len(result)}
 
