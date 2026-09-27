@@ -81,6 +81,7 @@ async def get_storefront_products(
     location: Optional[str] = None,
     min_price: Optional[float] = None,
     max_price: Optional[float] = None,
+    ids: Optional[str] = Query(default=None, description="Comma-separated product IDs"),
     sort: Optional[str] = Query(default="newest", pattern="^(newest|price_asc|price_desc|name_asc|name_desc|rating|best_selling|featured)$"),
     skip: int = 0,
     limit: int = 24,
@@ -93,6 +94,21 @@ async def get_storefront_products(
 
     if config.excluded_category_names:
         query["category"] = {"$nin": config.excluded_category_names}
+
+    # Fast path: fetch specific wishlist / cart IDs
+    id_list: list[str] = []
+    if ids:
+        id_list = [i.strip() for i in ids.split(",") if i.strip()]
+        obj_ids = []
+        for i in id_list:
+            try:
+                obj_ids.append(PydanticObjectId(i))
+            except Exception:
+                continue
+        if obj_ids:
+            query["_id"] = {"$in": obj_ids}
+        else:
+            return {"products": [], "total": 0}
 
     if search:
         query["$or"] = [
@@ -112,12 +128,12 @@ async def get_storefront_products(
         else:
             query.update(location_query)
 
-    # For sort modes that need global ranking, pull a wider set then trim after sort
+    # Keep ranking window small — large windows + per-product reviews were killing latency
     fetch_limit = limit
     fetch_skip = skip
-    if sort in ("best_selling", "featured", "rating"):
+    if not id_list and sort in ("best_selling", "featured", "rating"):
         fetch_skip = 0
-        fetch_limit = max(limit + skip, 120)
+        fetch_limit = min(max(limit + skip, limit * 2), 48)
 
     products = await Product.find(query).skip(fetch_skip).limit(fetch_limit).to_list()
 
@@ -135,7 +151,7 @@ async def get_storefront_products(
             filtered.append(p)
         products = filtered
 
-    # Sorting
+    # Sorting (pre-review sorts)
     if sort == "price_asc":
         products.sort(key=lambda p: min((v.unit_price for v in p.variants), default=0))
     elif sort == "price_desc":
@@ -147,37 +163,42 @@ async def get_storefront_products(
     elif sort == "newest":
         products.sort(key=lambda p: p.created_at, reverse=True)
     elif sort == "featured":
-        # Prioritize featured products
         featured_ids = config.featured_product_ids or []
         products.sort(key=lambda p: (0 if str(p.id) in featured_ids else 1, p.created_at), reverse=False)
-    elif sort == "best_selling":
-        # Proxy: sort by a mix of rating and review count (we don't have orders count on product easily)
-        # We'll calculate it on the fly below or just use a placeholder
-        pass # Will handle after computing fields
 
-    # Fetch locations and warehouses for mapping
+    # Batch-load reviews once (was N+1 per product — main latency cause)
+    product_ids = [str(p.id) for p in products]
+    rating_map: dict[str, tuple[float, int]] = {pid: (0.0, 0) for pid in product_ids}
+    if product_ids:
+        all_reviews = await ProductReview.find(
+            {"product_id": {"$in": product_ids}, "is_approved": True}
+        ).to_list()
+        buckets: dict[str, list[int]] = {}
+        for r in all_reviews:
+            buckets.setdefault(r.product_id, []).append(r.rating)
+        for pid, ratings in buckets.items():
+            rating_map[pid] = (round(sum(ratings) / len(ratings), 1), len(ratings))
+
+    # Location maps (single query each)
     warehouses = await Warehouse.find({"organization_id": org_id}).to_list()
     locations = await Location.find({"organization_id": org_id}).to_list()
-    
     warehouse_map = {str(w.id): w.name for w in warehouses}
     location_map = {str(l.id): l.name for l in locations}
 
-    # Build response with computed fields
     result = []
     now = datetime.utcnow()
     for p in products:
         total_stock = sum(v.stock for v in p.variants)
-        
+
         is_promo_active = False
         if getattr(p, "is_on_promotion", False) and getattr(p, "promotion_start", None) and getattr(p, "promotion_end", None):
-            # Convert timezone-aware datetimes if necessary, assuming utcnow
             promo_start = p.promotion_start.replace(tzinfo=None) if p.promotion_start.tzinfo else p.promotion_start
             promo_end = p.promotion_end.replace(tzinfo=None) if p.promotion_end.tzinfo else p.promotion_end
             if promo_start <= now <= promo_end:
                 is_promo_active = True
 
         original_price = min((v.unit_price for v in p.variants), default=0) if p.variants else 0
-        
+
         variants_dump = []
         for v in p.variants:
             vdump = v.model_dump()
@@ -185,12 +206,9 @@ async def get_storefront_products(
                 vdump["original_price"] = v.unit_price
                 vdump["unit_price"] = v.promotion_price
             variants_dump.append(vdump)
-            
-        lowest_price = min((v["unit_price"] for v in variants_dump), default=0) if variants_dump else 0
 
-        reviews = await ProductReview.find({"product_id": str(p.id), "is_approved": True}).to_list()
-        avg_rating = round(sum(r.rating for r in reviews) / len(reviews), 1) if reviews else 0
-        review_count = len(reviews)
+        lowest_price = min((v["unit_price"] for v in variants_dump), default=0) if variants_dump else 0
+        avg_rating, review_count = rating_map.get(str(p.id), (0.0, 0))
 
         location_name = None
         if getattr(p, "warehouse_id", None) and p.warehouse_id in warehouse_map:
@@ -215,13 +233,16 @@ async def get_storefront_products(
             "created_at": p.created_at.isoformat(),
         })
 
-    if sort == "best_selling":
-        result.sort(key=lambda x: (x["avg_rating"], x["review_count"]), reverse=True)
-    elif sort == "rating":
+    if sort in ("best_selling", "rating"):
         result.sort(key=lambda x: (x["avg_rating"], x["review_count"]), reverse=True)
 
-    if sort in ("best_selling", "featured", "rating"):
+    if not id_list and sort in ("best_selling", "featured", "rating"):
         result = result[skip : skip + limit]
+
+    # Preserve wishlist id order when requested
+    if id_list:
+        order = {pid: i for i, pid in enumerate(id_list)}
+        result.sort(key=lambda x: order.get(x["id"], 9999))
 
     return {"products": result, "total": len(result)}
 
