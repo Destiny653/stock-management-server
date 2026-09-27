@@ -196,15 +196,35 @@ async def get_storefront_products(
 
     result = []
     now = datetime.utcnow()
+
+    def _as_naive(dt: datetime) -> datetime:
+        if dt.tzinfo is not None:
+            return dt.replace(tzinfo=None)
+        return dt
+
     for p in products:
         total_stock = sum(v.stock for v in p.variants)
 
+        # Promotion: honor flag + optional window (timezone-tolerant)
+        is_on_promotion = bool(getattr(p, "is_on_promotion", False))
         is_promo_active = False
-        if getattr(p, "is_on_promotion", False) and getattr(p, "promotion_start", None) and getattr(p, "promotion_end", None):
-            promo_start = p.promotion_start.replace(tzinfo=None) if p.promotion_start.tzinfo else p.promotion_start
-            promo_end = p.promotion_end.replace(tzinfo=None) if p.promotion_end.tzinfo else p.promotion_end
-            if promo_start <= now <= promo_end:
+        if is_on_promotion:
+            start = getattr(p, "promotion_start", None)
+            end = getattr(p, "promotion_end", None)
+            if start and end:
+                try:
+                    is_promo_active = _as_naive(start) <= now <= _as_naive(end)
+                except Exception:
+                    is_promo_active = True
+            else:
+                # Flag set without dates → treat as active
                 is_promo_active = True
+
+        has_promo_price = any(
+            getattr(v, "promotion_price", None) is not None for v in (p.variants or [])
+        )
+        # Apply promo pricing when window is active OR product is flagged with promo prices
+        apply_promo = is_promo_active or (is_on_promotion and has_promo_price)
 
         original_price = min((v.unit_price for v in p.variants), default=0) if p.variants else 0
 
@@ -220,12 +240,30 @@ async def get_storefront_products(
                 "stock": v.stock,
                 "image_url": v.image_url,
             }
-            if is_promo_active and getattr(v, "promotion_price", None) is not None:
+            if apply_promo and getattr(v, "promotion_price", None) is not None:
                 vdump["original_price"] = v.unit_price
                 vdump["unit_price"] = v.promotion_price
+                vdump["promotion_price"] = v.promotion_price
             variants_dump.append(vdump)
 
         lowest_price = min((v["unit_price"] for v in variants_dump), default=0) if variants_dump else 0
+        # When promo applied, surface the pre-promo price as original for cards/filters
+        if apply_promo and lowest_price < original_price:
+            pass  # original_price already from unit_price
+        elif apply_promo and has_promo_price:
+            # Ensure original stays above promo for UI even if mins align oddly
+            promo_mins = [
+                float(v.promotion_price)
+                for v in p.variants
+                if getattr(v, "promotion_price", None) is not None
+            ]
+            if promo_mins:
+                lowest_price = min(promo_mins)
+                if original_price <= lowest_price:
+                    originals = [float(v.unit_price) for v in p.variants]
+                    if originals:
+                        original_price = max(originals)
+
         avg_rating, review_count = rating_map.get(str(p.id), (0.0, 0))
 
         desc = (p.description or "").strip()
@@ -245,6 +283,8 @@ async def get_storefront_products(
             "lowest_price": lowest_price,
             "avg_rating": avg_rating,
             "review_count": review_count,
+            "is_on_promotion": is_on_promotion,
+            "is_promo_active": apply_promo,
             "created_at": p.created_at.isoformat(),
         })
 
@@ -285,19 +325,28 @@ async def get_storefront_product(slug: str, product_id: str) -> Any:
     total_stock = sum(v.stock for v in product.variants)
 
     now = datetime.utcnow()
+    is_on_promotion = bool(getattr(product, "is_on_promotion", False))
     is_promo_active = False
-    if getattr(product, "is_on_promotion", False) and getattr(product, "promotion_start", None) and getattr(product, "promotion_end", None):
-        promo_start = product.promotion_start.replace(tzinfo=None) if product.promotion_start.tzinfo else product.promotion_start
-        promo_end = product.promotion_end.replace(tzinfo=None) if product.promotion_end.tzinfo else product.promotion_end
-        if promo_start <= now <= promo_end:
+    if is_on_promotion:
+        start = getattr(product, "promotion_start", None)
+        end = getattr(product, "promotion_end", None)
+        if start and end:
+            promo_start = start.replace(tzinfo=None) if start.tzinfo else start
+            promo_end = end.replace(tzinfo=None) if end.tzinfo else end
+            is_promo_active = promo_start <= now <= promo_end
+        else:
             is_promo_active = True
+    has_promo_price = any(
+        getattr(v, "promotion_price", None) is not None for v in (product.variants or [])
+    )
+    apply_promo = is_promo_active or (is_on_promotion and has_promo_price)
 
     original_price = min((v.unit_price for v in product.variants), default=0) if product.variants else 0
     
     variants_dump = []
     for v in product.variants:
         vdump = v.model_dump()
-        if is_promo_active and getattr(v, "promotion_price", None) is not None:
+        if apply_promo and getattr(v, "promotion_price", None) is not None:
             vdump["original_price"] = v.unit_price
             vdump["unit_price"] = v.promotion_price
         variants_dump.append(vdump)
@@ -317,6 +366,8 @@ async def get_storefront_product(slug: str, product_id: str) -> Any:
         "lowest_price": lowest_price,
         "avg_rating": avg_rating,
         "review_count": len(reviews),
+        "is_on_promotion": is_on_promotion,
+        "is_promo_active": apply_promo,
         "reviews": [
             {
                 "id": str(r.id),

@@ -292,16 +292,21 @@ async def update_product(
             from services.web_push import notify_promotion, _product_price_bits
 
             price, original = _product_price_bits(product)
-            asyncio.create_task(
-                notify_promotion(
-                    product.organization_id,
-                    product.name,
-                    str(product.id),
-                    image_url=getattr(product, "image_url", None),
-                    price=price,
-                    original_price=original,
-                )
-            )
+
+            async def _push():
+                try:
+                    await notify_promotion(
+                        product.organization_id,
+                        product.name,
+                        str(product.id),
+                        image_url=getattr(product, "image_url", None),
+                        price=price,
+                        original_price=original,
+                    )
+                except Exception as push_err:
+                    print(f"Promotion push failed: {push_err}")
+
+            asyncio.create_task(_push())
         except Exception as e:
             print(f"Failed to queue promotion push: {e}")
 
