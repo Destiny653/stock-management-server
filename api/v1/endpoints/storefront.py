@@ -274,11 +274,26 @@ async def get_storefront_categories(slug: str) -> Any:
         if cat.name in excluded:
             continue
         # Count products in category
-        count = await Product.find({
+        products = await Product.find({
             "organization_id": config.organization_id,
             "category": cat.name,
             "status": {"$ne": "discontinued"},
-        }).count()
+        }).to_list()
+        count = len(products)
+
+        # Dynamic average rating from approved reviews on products in this category
+        product_ids = [str(p.id) for p in products]
+        avg_rating = 0.0
+        review_count = 0
+        if product_ids:
+            reviews = await ProductReview.find({
+                "product_id": {"$in": product_ids},
+                "is_approved": True,
+            }).to_list()
+            if reviews:
+                review_count = len(reviews)
+                avg_rating = round(sum(r.rating for r in reviews) / review_count, 1)
+
         result.append({
             "id": str(cat.id),
             "name": cat.name,
@@ -286,6 +301,8 @@ async def get_storefront_categories(slug: str) -> Any:
             "color": cat.color,
             "icon": cat.icon,
             "product_count": count,
+            "avg_rating": avg_rating,
+            "review_count": review_count,
         })
 
     return result
