@@ -132,20 +132,13 @@ async def create_product(
     # Notify installed PWA shoppers about new arrivals (best-effort)
     try:
         import asyncio
-        from services.web_push import notify_new_arrival, _product_price_bits
+        from services.web_push import notify_new_arrival
 
         for product in created_products:
             if not product.name:
                 continue
-            price, _ = _product_price_bits(product)
             asyncio.create_task(
-                notify_new_arrival(
-                    organization_id,
-                    product.name,
-                    str(product.id),
-                    image_url=getattr(product, "image_url", None),
-                    price=price,
-                )
+                notify_new_arrival(organization_id, product.name, str(product.id))
             )
     except Exception as e:
         print(f"Failed to queue new-arrival push: {e}")
@@ -289,24 +282,11 @@ async def update_product(
     if now_on_promo and not was_on_promo:
         try:
             import asyncio
-            from services.web_push import notify_promotion, _product_price_bits
+            from services.web_push import notify_promotion
 
-            price, original = _product_price_bits(product)
-
-            async def _push():
-                try:
-                    await notify_promotion(
-                        product.organization_id,
-                        product.name,
-                        str(product.id),
-                        image_url=getattr(product, "image_url", None),
-                        price=price,
-                        original_price=original,
-                    )
-                except Exception as push_err:
-                    print(f"Promotion push failed: {push_err}")
-
-            asyncio.create_task(_push())
+            asyncio.create_task(
+                notify_promotion(product.organization_id, product.name, str(product.id))
+            )
         except Exception as e:
             print(f"Failed to queue promotion push: {e}")
 
