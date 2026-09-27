@@ -7,6 +7,7 @@ from beanie import PydanticObjectId
 
 from models.platform_settings import PlatformSettings
 from models.storefront_config import StorefrontConfig
+from models.organization import Organization
 from models.product import Product
 from models.product_review import ProductReview
 from models.storefront_order import StorefrontOrder, StorefrontOrderItem
@@ -42,11 +43,33 @@ async def get_storefront(slug: str) -> Any:
         "google-pay",
         "paypal",
     ]
-    
+
+    # Prefer storefront brand assets; fall back to organization logo for site/PWA icon
+    org_logo = None
+    try:
+        org_id = config.organization_id
+        org = None
+        if org_id:
+            try:
+                org = await Organization.get(PydanticObjectId(org_id))
+            except Exception:
+                org = await Organization.find_one({"_id": org_id})
+            if not org:
+                org = await Organization.find_one({"_id": str(org_id)})
+        if org and getattr(org, "logo_url", None):
+            org_logo = org.logo_url
+    except Exception:
+        org_logo = None
+
     data = config.model_dump()
     data["id"] = str(config.id)
     data["default_hero_image"] = default_hero
     data["allowed_payment_methods"] = allowed_payments
+    if not data.get("logo_url") and org_logo:
+        data["logo_url"] = org_logo
+    if not data.get("favicon_url"):
+        data["favicon_url"] = data.get("logo_url") or org_logo
+    data["organization_logo_url"] = org_logo
     return data
 
 
