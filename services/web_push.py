@@ -85,12 +85,14 @@ def _vapid_authorization(endpoint: str, priv_b64: str, pub_b64: str) -> str:
             "exp": int(time.time()) + 12 * 3600,
         }
         headers = vapid.sign(claims)
+        # py_vapid returns Authorization already formatted
         auth = headers.get("Authorization") or headers.get("authorization")
         if auth:
             return auth
     except Exception as e:
         logger.warning("py_vapid sign failed, using manual JWT: %s", e)
 
+    # Manual ES256 JWT fallback
     aud = f"{urlparse(endpoint).scheme}://{urlparse(endpoint).netloc}"
     header = _urlsafe_b64(json.dumps({"typ": "JWT", "alg": "ES256"}).encode())
     body = _urlsafe_b64(
@@ -109,6 +111,7 @@ def _vapid_authorization(endpoint: str, priv_b64: str, pub_b64: str) -> str:
         default_backend(),
     )
     signature = private_key.sign(signing_input, ec.ECDSA(hashes.SHA256()))
+    # Convert DER to raw r||s
     r, s = utils.decode_dss_signature(signature)
     sig = _urlsafe_b64(r.to_bytes(32, "big") + s.to_bytes(32, "big"))
     token = f"{header}.{body}.{sig}"
