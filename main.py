@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from core.config import settings
 from db.mongodb import init_db
 
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response
 from motor.motor_asyncio import AsyncIOMotorGridFSBucket
 from gridfs.errors import NoFile
 from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
@@ -60,26 +60,56 @@ async def get_gridfs_file(bucket_name: str, filename: str):
     from db.mongodb import db
     if db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
-    
+
     fs = AsyncIOMotorGridFSBucket(db, bucket_name=bucket_name)
     try:
-        # Find the file by filename
         cursor = fs.find({"filename": filename})
         file_docs = await cursor.to_list(length=1)
         if not file_docs:
             raise HTTPException(status_code=404, detail="Not Found")
-        
+
         grid_out = await fs.open_download_stream_by_name(filename)
-        
-        async def file_streamer():
-            while chunk := await grid_out.readchunk():
-                yield chunk
-                
-        content_type = grid_out.metadata.get("contentType", "application/octet-stream") if grid_out.metadata else "application/octet-stream"
-        
-        return StreamingResponse(file_streamer(), media_type=content_type)
+        raw = await grid_out.read()
+        content_type = (
+            grid_out.metadata.get("contentType", "application/octet-stream")
+            if grid_out.metadata
+            else "application/octet-stream"
+        )
+
+        # HEIC/HEIF only renders on Apple — convert to JPEG for all browsers
+        from core.image_upload import is_heic_upload, convert_heic_to_jpeg
+
+        if is_heic_upload(filename, content_type, raw):
+            try:
+                jpeg = convert_heic_to_jpeg(raw)
+                # Persist a .jpg sibling so subsequent requests are cheap
+                jpg_name = filename.rsplit(".", 1)[0] + ".jpg" if "." in filename else f"{filename}.jpg"
+                existing_jpg = await fs.find({"filename": jpg_name}).to_list(length=1)
+                if not existing_jpg:
+                    grid_in = fs.open_upload_stream(
+                        jpg_name, metadata={"contentType": "image/jpeg", "convertedFrom": filename}
+                    )
+                    await grid_in.write(jpeg)
+                    await grid_in.close()
+                return Response(
+                    content=jpeg,
+                    media_type="image/jpeg",
+                    headers={"Cache-Control": "public, max-age=86400"},
+                )
+            except HTTPException:
+                raise
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"HEIC conversion failed: {e}")
+
+        return Response(
+            content=raw,
+            media_type=content_type,
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
     except NoFile:
         raise HTTPException(status_code=404, detail="Not Found")
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
