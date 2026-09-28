@@ -118,8 +118,8 @@ def absolute_url(path_or_url: Optional[str], *, prefer_api: bool = False) -> Opt
     return urljoin(base + "/", path.lstrip("/"))
 
 
-def _vapid_authorization(endpoint: str, priv_b64: str, pub_b64: str) -> str:
-    """Build VAPID Authorization header value."""
+def _vapid_headers(endpoint: str, priv_b64: str, pub_b64: str) -> dict[str, str]:
+    """Build VAPID headers compatible with Apple APNs, Google FCM, and Mozilla Push."""
     try:
         from py_vapid import Vapid
 
@@ -130,10 +130,11 @@ def _vapid_authorization(endpoint: str, priv_b64: str, pub_b64: str) -> str:
             "aud": f"{parsed.scheme}://{parsed.netloc}",
             "exp": int(time.time()) + 12 * 3600,
         }
-        headers = vapid.sign(claims)
-        auth = headers.get("Authorization") or headers.get("authorization")
-        if auth:
-            return auth
+        res = vapid.sign(claims)
+        headers = {k: v for k, v in res.items()}
+        if "Crypto-Key" not in headers and "crypto-key" not in headers:
+            headers["Crypto-Key"] = f"p256ecdsa={pub_b64}"
+        return headers
     except Exception as e:
         logger.warning("py_vapid sign failed, using manual JWT: %s", e)
 
@@ -158,7 +159,10 @@ def _vapid_authorization(endpoint: str, priv_b64: str, pub_b64: str) -> str:
     r, s = utils.decode_dss_signature(signature)
     sig = _urlsafe_b64(r.to_bytes(32, "big") + s.to_bytes(32, "big"))
     token = f"{header}.{body}.{sig}"
-    return f"vapid t={token}, k={pub_b64}"
+    return {
+        "Authorization": f"vapid t={token},k={pub_b64}",
+        "Crypto-Key": f"p256ecdsa={pub_b64}",
+    }
 
 
 def _encrypt_payload(payload: bytes, p256dh: str, auth: str) -> tuple[bytes, dict]:
@@ -184,8 +188,9 @@ def _encrypt_payload(payload: bytes, p256dh: str, auth: str) -> tuple[bytes, dic
 
 def _send_one(endpoint: str, p256dh: str, auth_key: str, payload: bytes, pub: str, priv: str) -> int:
     body, extra_headers = _encrypt_payload(payload, p256dh, auth_key)
+    vapid_h = _vapid_headers(endpoint, priv, pub)
     headers = {
-        "Authorization": _vapid_authorization(endpoint, priv, pub),
+        **vapid_h,
         "Content-Type": "application/octet-stream",
         "Content-Encoding": extra_headers.get("Content-Encoding", "aes128gcm"),
         "TTL": extra_headers.get("TTL", "86400"),
@@ -286,7 +291,8 @@ async def send_store_push(
             )
             if status in (200, 201, 204):
                 sent += 1
-            elif status in (404, 410):
+            elif status == 410:
+                # 410 Gone: Explicitly unsubscribed by user/device OS — delete record
                 failed += 1
                 try:
                     await sub.delete()
@@ -294,6 +300,9 @@ async def send_store_push(
                     pass
             else:
                 failed += 1
+        except Exception as e:
+            failed += 1
+            logger.warning("Push error for %s: %s", sub.endpoint[:48], e)
         except Exception as e:
             failed += 1
             logger.warning("Push error for %s: %s", sub.endpoint[:48], e)
