@@ -7,6 +7,8 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "StockFlow API"
     API_V1_STR: str = "/api/v1"
     FRONTEND_URL: str = "http://localhost:3000"
+    # Public origin that serves /uploads (optional). Defaults to FRONTEND_URL (Next rewrite).
+    PUBLIC_API_URL: str = ""
     
     # MongoDB
     MONGODB_URL: str = "mongodb://localhost:27017"

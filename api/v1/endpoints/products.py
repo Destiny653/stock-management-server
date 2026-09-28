@@ -137,7 +137,13 @@ async def create_product(
             if not product.name:
                 continue
             result = await notify_new_arrival(
-                str(organization_id), product.name, str(product.id)
+                str(organization_id),
+                product.name,
+                str(product.id),
+                image_url=getattr(product, "image_url", None)
+                or (
+                    (product.variants[0].image_url if product.variants else None)
+                ),
             )
             print(f"New-arrival push: {result}")
     except Exception as e:
@@ -288,7 +294,13 @@ async def update_product(
             from services.web_push import notify_promotion
 
             result = await notify_promotion(
-                str(product.organization_id), product.name, str(product.id)
+                str(product.organization_id),
+                product.name,
+                str(product.id),
+                image_url=getattr(product, "image_url", None)
+                or (
+                    (product.variants[0].image_url if getattr(product, "variants", None) else None)
+                ),
             )
             print(f"Promotion push: {result}")
         except Exception as e:

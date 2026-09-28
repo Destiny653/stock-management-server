@@ -639,6 +639,8 @@ async def test_store_push(slug: str) -> Any:
         url=f"/store/{slug}",
         tag="push-test",
         icon=f"/store/{slug}/icon",
+        badge="/icons/badge-96.png",
+        image=(config.logo_url or config.banner_url or config.favicon_url),
     )
     return {"ok": True, **result}
 
