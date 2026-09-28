@@ -79,20 +79,19 @@ def _vapid_authorization(endpoint: str, priv_b64: str, pub_b64: str) -> str:
         from py_vapid import Vapid
 
         vapid = Vapid.from_string(private_key=priv_b64)
+        parsed = urlparse(endpoint)
         claims = {
             "sub": settings.VAPID_SUBJECT or "mailto:support@stockflow.com",
-            "aud": f"{requests.utils.urlparse(endpoint).scheme}://{requests.utils.urlparse(endpoint).netloc}",
+            "aud": f"{parsed.scheme}://{parsed.netloc}",
             "exp": int(time.time()) + 12 * 3600,
         }
         headers = vapid.sign(claims)
-        # py_vapid returns Authorization already formatted
         auth = headers.get("Authorization") or headers.get("authorization")
         if auth:
             return auth
     except Exception as e:
         logger.warning("py_vapid sign failed, using manual JWT: %s", e)
 
-    # Manual ES256 JWT fallback
     aud = f"{urlparse(endpoint).scheme}://{urlparse(endpoint).netloc}"
     header = _urlsafe_b64(json.dumps({"typ": "JWT", "alg": "ES256"}).encode())
     body = _urlsafe_b64(
@@ -111,7 +110,6 @@ def _vapid_authorization(endpoint: str, priv_b64: str, pub_b64: str) -> str:
         default_backend(),
     )
     signature = private_key.sign(signing_input, ec.ECDSA(hashes.SHA256()))
-    # Convert DER to raw r||s
     r, s = utils.decode_dss_signature(signature)
     sig = _urlsafe_b64(r.to_bytes(32, "big") + s.to_bytes(32, "big"))
     token = f"{header}.{body}.{sig}"
@@ -120,27 +118,23 @@ def _vapid_authorization(endpoint: str, priv_b64: str, pub_b64: str) -> str:
 
 def _encrypt_payload(payload: bytes, p256dh: str, auth: str) -> tuple[bytes, dict]:
     """Encrypt with aes128gcm per RFC 8291 (via http_ece)."""
-    try:
-        import http_ece
+    import http_ece
 
-        client_public = _urlsafe_b64decode(p256dh)
-        auth_secret = _urlsafe_b64decode(auth)
-        local_key = ec.generate_private_key(ec.SECP256R1(), default_backend())
-        encrypted = http_ece.encrypt(
-            payload,
-            private_key=local_key,
-            dh=client_public,
-            auth_secret=auth_secret,
-            version="aes128gcm",
-        )
-        return encrypted, {
-            "Content-Encoding": "aes128gcm",
-            "TTL": "86400",
-            "Urgency": "normal",
-        }
-    except Exception as e:
-        logger.error("Payload encryption failed: %s", e)
-        raise
+    client_public = _urlsafe_b64decode(p256dh)
+    auth_secret = _urlsafe_b64decode(auth)
+    local_key = ec.generate_private_key(ec.SECP256R1(), default_backend())
+    encrypted = http_ece.encrypt(
+        payload,
+        private_key=local_key,
+        dh=client_public,
+        auth_secret=auth_secret,
+        version="aes128gcm",
+    )
+    return encrypted, {
+        "Content-Encoding": "aes128gcm",
+        "TTL": "86400",
+        "Urgency": "normal",
+    }
 
 
 def _send_one(endpoint: str, p256dh: str, auth_key: str, payload: bytes, pub: str, priv: str) -> int:
@@ -152,7 +146,14 @@ def _send_one(endpoint: str, p256dh: str, auth_key: str, payload: bytes, pub: st
         "TTL": extra_headers.get("TTL", "86400"),
         "Urgency": extra_headers.get("Urgency", "normal"),
     }
-    resp = requests.post(endpoint, data=body, headers=headers, timeout=15)
+    resp = requests.post(endpoint, data=body, headers=headers, timeout=20)
+    if resp.status_code not in (200, 201, 204):
+        logger.warning(
+            "Push HTTP %s endpoint=%s body=%s",
+            resp.status_code,
+            endpoint[:64],
+            (resp.text or "")[:200],
+        )
     return resp.status_code
 
 
@@ -167,10 +168,17 @@ async def send_store_push(
 ) -> dict[str, Any]:
     """Send a Web Push notification to all subscribers of a store organization."""
     from models.store_push_subscription import StorePushSubscription
+    import asyncio
 
-    subs = await StorePushSubscription.find({"organization_id": organization_id}).to_list()
+    # Match both string forms of org id
+    org_ids = {str(organization_id)}
+    subs = await StorePushSubscription.find(
+        {"organization_id": {"$in": list(org_ids)}}
+    ).to_list()
     if not subs:
-        return {"sent": 0, "failed": 0}
+        # Fallback: also try by store slug derived later — log clearly
+        logger.warning("No push subscribers for organization_id=%s", organization_id)
+        return {"sent": 0, "failed": 0, "subscribers": 0}
 
     pub, priv = _ensure_vapid_keys()
     payload = json.dumps(
@@ -185,9 +193,16 @@ async def send_store_push(
 
     sent = 0
     failed = 0
+    loop = asyncio.get_event_loop()
+
     for sub in subs:
         try:
-            status = _send_one(sub.endpoint, sub.keys.p256dh, sub.keys.auth, payload, pub, priv)
+            status = await loop.run_in_executor(
+                None,
+                lambda s=sub: _send_one(
+                    s.endpoint, s.keys.p256dh, s.keys.auth, payload, pub, priv
+                ),
+            )
             if status in (200, 201, 204):
                 sent += 1
             elif status in (404, 410):
@@ -198,47 +213,63 @@ async def send_store_push(
                     pass
             else:
                 failed += 1
-                logger.warning("Push HTTP %s for %s", status, sub.endpoint[:48])
         except Exception as e:
             failed += 1
-            logger.warning("Push error: %s", e)
+            logger.warning("Push error for %s: %s", sub.endpoint[:48], e)
 
-    return {"sent": sent, "failed": failed}
+    logger.info(
+        "Push result org=%s sent=%s failed=%s subscribers=%s title=%s",
+        organization_id,
+        sent,
+        failed,
+        len(subs),
+        title,
+    )
+    return {"sent": sent, "failed": failed, "subscribers": len(subs)}
 
 
-async def notify_new_arrival(organization_id: str, product_name: str, product_id: str) -> None:
+def _product_url(slug: str, product_id: str) -> str:
+    base = (settings.FRONTEND_URL or "").rstrip("/")
+    if base:
+        return f"{base}/store/{slug}/products/{product_id}"
+    return f"/store/{slug}/products/{product_id}"
+
+
+async def notify_new_arrival(organization_id: str, product_name: str, product_id: str) -> dict[str, Any]:
     from models.storefront_config import StorefrontConfig
 
-    config = await StorefrontConfig.find_one({"organization_id": organization_id})
+    config = await StorefrontConfig.find_one({"organization_id": str(organization_id)})
+    if not config:
+        config = await StorefrontConfig.find_one({"organization_id": organization_id})
     if not config or not config.slug:
-        return
+        logger.warning("notify_new_arrival: no storefront for org %s", organization_id)
+        return {"sent": 0, "failed": 0, "subscribers": 0}
     slug = config.slug
-    base = (settings.FRONTEND_URL or "").rstrip("/")
-    url = f"{base}/store/{slug}/products/{product_id}"
-    await send_store_push(
-        organization_id=organization_id,
+    return await send_store_push(
+        organization_id=str(config.organization_id),
         title=f"New at {config.store_name or 'our store'}",
         body=f"Just arrived: {product_name}",
-        url=url,
+        url=_product_url(slug, product_id),
         tag=f"new-{product_id}",
-        icon=f"{base}/store/{slug}/icon" if base else None,
+        icon=f"/store/{slug}/icon",
     )
 
 
-async def notify_promotion(organization_id: str, product_name: str, product_id: str) -> None:
+async def notify_promotion(organization_id: str, product_name: str, product_id: str) -> dict[str, Any]:
     from models.storefront_config import StorefrontConfig
 
-    config = await StorefrontConfig.find_one({"organization_id": organization_id})
+    config = await StorefrontConfig.find_one({"organization_id": str(organization_id)})
+    if not config:
+        config = await StorefrontConfig.find_one({"organization_id": organization_id})
     if not config or not config.slug:
-        return
+        logger.warning("notify_promotion: no storefront for org %s", organization_id)
+        return {"sent": 0, "failed": 0, "subscribers": 0}
     slug = config.slug
-    base = (settings.FRONTEND_URL or "").rstrip("/")
-    url = f"{base}/store/{slug}/products/{product_id}"
-    await send_store_push(
-        organization_id=organization_id,
+    return await send_store_push(
+        organization_id=str(config.organization_id),
         title=f"Promotion at {config.store_name or 'our store'}",
         body=f"On sale now: {product_name}",
-        url=url,
-        tag=f"promo-{product_id}",
-        icon=f"{base}/store/{slug}/icon" if base else None,
+        url=_product_url(slug, product_id),
+        tag=f"promo-{product_id}-{int(time.time())}",
+        icon=f"/store/{slug}/icon",
     )

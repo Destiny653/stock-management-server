@@ -129,19 +129,19 @@ async def create_product(
         await product.create()
         created_products.append(product)
 
-    # Notify installed PWA shoppers about new arrivals (best-effort)
+    # Notify installed PWA shoppers about new arrivals (best-effort, awaited so it actually sends)
     try:
-        import asyncio
         from services.web_push import notify_new_arrival
 
         for product in created_products:
             if not product.name:
                 continue
-            asyncio.create_task(
-                notify_new_arrival(organization_id, product.name, str(product.id))
+            result = await notify_new_arrival(
+                str(organization_id), product.name, str(product.id)
             )
+            print(f"New-arrival push: {result}")
     except Exception as e:
-        print(f"Failed to queue new-arrival push: {e}")
+        print(f"Failed to send new-arrival push: {e}")
     
     # Return single object if input was single, else return list
     return created_products[0] if not isinstance(product_in, list) else created_products
@@ -277,18 +277,22 @@ async def update_product(
     product.updated_at = datetime.utcnow()
     await product.save()
 
-    # Notify shoppers when a promotion is newly activated
+    # Notify shoppers when a promotion is saved/activated (awaited so delivery isn't dropped)
     now_on_promo = bool(getattr(product, "is_on_promotion", False))
-    if now_on_promo and not was_on_promo:
+    promo_touched = any(
+        k in update_data
+        for k in ("is_on_promotion", "promotion_start", "promotion_end", "variants")
+    )
+    if now_on_promo and (not was_on_promo or promo_touched):
         try:
-            import asyncio
             from services.web_push import notify_promotion
 
-            asyncio.create_task(
-                notify_promotion(product.organization_id, product.name, str(product.id))
+            result = await notify_promotion(
+                str(product.organization_id), product.name, str(product.id)
             )
+            print(f"Promotion push: {result}")
         except Exception as e:
-            print(f"Failed to queue promotion push: {e}")
+            print(f"Failed to send promotion push: {e}")
 
     return product
 

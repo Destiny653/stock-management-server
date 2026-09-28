@@ -82,6 +82,10 @@ async def get_storefront_products(
     min_price: Optional[float] = None,
     max_price: Optional[float] = None,
     ids: Optional[str] = Query(default=None, description="Comma-separated product IDs"),
+    on_promotion: Optional[bool] = Query(
+        default=None,
+        description="If true, only products flagged is_on_promotion",
+    ),
     sort: Optional[str] = Query(default="newest", pattern="^(newest|price_asc|price_desc|name_asc|name_desc|rating|best_selling|featured)$"),
     skip: int = 0,
     limit: int = 24,
@@ -120,6 +124,9 @@ async def get_storefront_products(
     if category:
         query["category"] = category
 
+    if on_promotion is True:
+        query["is_on_promotion"] = True
+
     if location:
         location_query = {"$or": [{"location_id": location}, {"warehouse_id": location}]}
         if "$or" in query:
@@ -134,11 +141,14 @@ async def get_storefront_products(
     if not id_list and sort in ("best_selling", "featured", "rating"):
         fetch_skip = 0
         fetch_limit = min(max(limit + skip, limit * 2), 48)
+    # Promotions: allow a wider window so newly flagged items aren't truncated by "newest"
+    if on_promotion is True:
+        fetch_limit = min(max(limit, 48), 100)
 
     find_q = Product.find(query)
     # Push simple sorts to Mongo so skip/limit return the right page without loading extras
     if sort == "newest":
-        find_q = find_q.sort("-created_at")
+        find_q = find_q.sort("-updated_at" if on_promotion else "-created_at")
     elif sort == "name_asc":
         find_q = find_q.sort("+name")
     elif sort == "name_desc":
@@ -195,40 +205,18 @@ async def get_storefront_products(
             rating_map[pid] = (round(float(row.get("avg") or 0), 1), int(row.get("count") or 0))
 
     result = []
-    now = datetime.utcnow()
-
-    def _as_naive(dt: datetime) -> datetime:
-        if dt.tzinfo is not None:
-            return dt.replace(tzinfo=None)
-        return dt
-
     for p in products:
         total_stock = sum(v.stock for v in p.variants)
 
-        # Promotion: honor flag + optional window (timezone-tolerant)
         is_on_promotion = bool(getattr(p, "is_on_promotion", False))
-        is_promo_active = False
-        if is_on_promotion:
-            start = getattr(p, "promotion_start", None)
-            end = getattr(p, "promotion_end", None)
-            if start and end:
-                try:
-                    is_promo_active = _as_naive(start) <= now <= _as_naive(end)
-                except Exception:
-                    is_promo_active = True
-            else:
-                # Flag set without dates → treat as active
-                is_promo_active = True
-
+        # Flagged in POS → always show promo pricing on the storefront
+        apply_promo = is_on_promotion
         has_promo_price = any(
             getattr(v, "promotion_price", None) is not None for v in (p.variants or [])
         )
-        # Apply promo pricing when window is active OR product is flagged with promo prices
-        apply_promo = is_promo_active or (is_on_promotion and has_promo_price)
 
         original_price = min((v.unit_price for v in p.variants), default=0) if p.variants else 0
 
-        # Slim variant payload for list cards (omit cost, warehouse_stocks, etc.)
         variants_dump = []
         for v in p.variants:
             unit_price = v.unit_price
@@ -247,11 +235,7 @@ async def get_storefront_products(
             variants_dump.append(vdump)
 
         lowest_price = min((v["unit_price"] for v in variants_dump), default=0) if variants_dump else 0
-        # When promo applied, surface the pre-promo price as original for cards/filters
-        if apply_promo and lowest_price < original_price:
-            pass  # original_price already from unit_price
-        elif apply_promo and has_promo_price:
-            # Ensure original stays above promo for UI even if mins align oddly
+        if apply_promo and has_promo_price and lowest_price >= original_price:
             promo_mins = [
                 float(v.promotion_price)
                 for v in p.variants
@@ -259,10 +243,9 @@ async def get_storefront_products(
             ]
             if promo_mins:
                 lowest_price = min(promo_mins)
-                if original_price <= lowest_price:
-                    originals = [float(v.unit_price) for v in p.variants]
-                    if originals:
-                        original_price = max(originals)
+                originals = [float(v.unit_price) for v in p.variants]
+                if originals and original_price <= lowest_price:
+                    original_price = max(originals)
 
         avg_rating, review_count = rating_map.get(str(p.id), (0.0, 0))
 
@@ -326,20 +309,7 @@ async def get_storefront_product(slug: str, product_id: str) -> Any:
 
     now = datetime.utcnow()
     is_on_promotion = bool(getattr(product, "is_on_promotion", False))
-    is_promo_active = False
-    if is_on_promotion:
-        start = getattr(product, "promotion_start", None)
-        end = getattr(product, "promotion_end", None)
-        if start and end:
-            promo_start = start.replace(tzinfo=None) if start.tzinfo else start
-            promo_end = end.replace(tzinfo=None) if end.tzinfo else end
-            is_promo_active = promo_start <= now <= promo_end
-        else:
-            is_promo_active = True
-    has_promo_price = any(
-        getattr(v, "promotion_price", None) is not None for v in (product.variants or [])
-    )
-    apply_promo = is_promo_active or (is_on_promotion and has_promo_price)
+    apply_promo = is_on_promotion
 
     original_price = min((v.unit_price for v in product.variants), default=0) if product.variants else 0
     
@@ -637,7 +607,7 @@ async def subscribe_store_push(slug: str, body: dict) -> Any:
 
     existing = await StorePushSubscription.find_one({"endpoint": endpoint})
     if existing:
-        existing.organization_id = config.organization_id
+        existing.organization_id = str(config.organization_id)
         existing.store_slug = slug
         existing.keys = PushSubscriptionKeys(p256dh=p256dh, auth=auth)
         existing.user_agent = body.get("user_agent")
@@ -646,7 +616,7 @@ async def subscribe_store_push(slug: str, body: dict) -> Any:
         return {"ok": True, "id": str(existing.id)}
 
     sub = StorePushSubscription(
-        organization_id=config.organization_id,
+        organization_id=str(config.organization_id),
         store_slug=slug,
         endpoint=endpoint,
         keys=PushSubscriptionKeys(p256dh=p256dh, auth=auth),
@@ -654,6 +624,23 @@ async def subscribe_store_push(slug: str, body: dict) -> Any:
     )
     await sub.create()
     return {"ok": True, "id": str(sub.id)}
+
+
+@router.post("/{slug}/push/test")
+async def test_store_push(slug: str) -> Any:
+    """Send a test notification to all subscribers of this store (public, for setup)."""
+    config = await _get_config_by_slug(slug)
+    from services.web_push import send_store_push
+
+    result = await send_store_push(
+        organization_id=str(config.organization_id),
+        title=f"Hello from {config.store_name or 'our store'}",
+        body="Notifications are working. You'll get alerts for new arrivals and promotions.",
+        url=f"/store/{slug}",
+        tag="push-test",
+        icon=f"/store/{slug}/icon",
+    )
+    return {"ok": True, **result}
 
 
 @router.delete("/{slug}/push/unsubscribe")
