@@ -303,9 +303,6 @@ async def send_store_push(
         except Exception as e:
             failed += 1
             logger.warning("Push error for %s: %s", sub.endpoint[:48], e)
-        except Exception as e:
-            failed += 1
-            logger.warning("Push error for %s: %s", sub.endpoint[:48], e)
 
     logger.info(
         "Push result org=%s sent=%s failed=%s subscribers=%s title=%s has_image=%s",

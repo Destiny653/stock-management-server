@@ -632,15 +632,25 @@ async def test_store_push(slug: str) -> Any:
     config = await _get_config_by_slug(slug)
     from services.web_push import send_store_push
 
+    latest_product = await Product.find_one(
+        {"organization_id": config.organization_id, "status": {"$ne": "discontinued"}}
+    ).sort("-created_at")
+
+    target_url = (
+        f"/store/{slug}/products/{latest_product.id}"
+        if latest_product
+        else f"/store/{slug}/products"
+    )
+
     result = await send_store_push(
         organization_id=str(config.organization_id),
-        title=f"Hello from {config.store_name or 'our store'}",
-        body="Notifications are working. You'll get alerts for new arrivals and promotions.",
-        url=f"/store/{slug}",
+        title=f"New at {config.store_name or 'our store'}",
+        body=f"Check out {latest_product.name}!" if latest_product else "Notifications are working. You'll get alerts for new arrivals and promotions.",
+        url=target_url,
         tag="push-test",
         icon=f"/store/{slug}/icon",
         badge="/icons/badge-96.png",
-        image=(config.logo_url or config.banner_url or config.favicon_url),
+        image=(getattr(latest_product, "image_url", None) or config.logo_url or config.banner_url or config.favicon_url),
     )
     return {"ok": True, **result}
 
