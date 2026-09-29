@@ -385,13 +385,15 @@ async def notify_promotion(
         logger.warning("notify_promotion: no storefront for org %s", organization_id)
         return {"sent": 0, "failed": 0, "subscribers": 0}
     slug = config.slug
+    store_title = config.store_name or "Special Offer"
     return await send_store_push(
         organization_id=str(config.organization_id),
-        title=f"On sale at {config.store_name or 'our store'}",
-        body=f"{product_name} — tap to view the deal",
+        title=f"🔥 Product on Promotion — {store_title}",
+        body=f"{product_name} is on promotion — tap to check out the offer!",
         url=_product_url(slug, product_id),
         tag=f"promo-{product_id}-{int(time.time())}",
         icon=_store_icon(slug),
         badge="/icons/badge-96.png",
         image=image_url,
     )
+
