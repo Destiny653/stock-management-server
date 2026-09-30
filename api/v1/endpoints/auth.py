@@ -1,6 +1,6 @@
 """Authentication endpoints"""
 from datetime import timedelta
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Literal
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Cookie
 from fastapi.security import OAuth2PasswordRequestForm
 from jose import jwt
@@ -21,11 +21,12 @@ import secrets
 from schemas.auth import ForgotPasswordRequest, ResetPasswordRequest, ResetStatusResponse
 from models.auth_request import PasswordResetRequest
 from services.notification import send_password_reset_email
+from core.rate_limiter import rate_limit
 
 router = APIRouter()
 
 
-@router.post("/login/access-token", response_model=Token)
+@router.post("/login/access-token", response_model=Token, dependencies=[Depends(rate_limit(5, 60, name="auth_login"))])
 async def login_access_token(
     response: Response,
     form_data: OAuth2PasswordRequestForm = Depends()
@@ -46,27 +47,25 @@ async def login_access_token(
     # 2 days in seconds = 172800
     refresh_token = security.create_refresh_token(str(user.id))
     
-    cookie_settings = {
-        "httponly": True,
-        "max_age": settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        "samesite": "none" if settings.ENVIRONMENT == "production" else "lax",
-        "secure": True if settings.ENVIRONMENT == "production" else False,
-    }
-    
+    samesite_val: Literal["lax", "none", "strict"] = "none" if settings.ENVIRONMENT == "production" else "lax"
+    secure_val: bool = settings.ENVIRONMENT == "production"
+
     response.set_cookie(
         key="access_token",
         value=access_token,
-        **cookie_settings
+        httponly=True,
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        samesite=samesite_val,
+        secure=secure_val,
     )
-    
-    # Refresh token specific settings
-    refresh_cookie_settings = cookie_settings.copy()
-    refresh_cookie_settings["max_age"] = 172800 # 2 days
     
     response.set_cookie(
         key="refresh_token",
         value=refresh_token,
-        **refresh_cookie_settings
+        httponly=True,
+        max_age=172800,  # 2 days
+        samesite=samesite_val,
+        secure=secure_val,
     )
     
     return {
@@ -86,7 +85,7 @@ async def logout(response: Response) -> Any:
     return {"message": "Logged out successfully"}
 
 
-@router.post("/refresh-token", response_model=Token)
+@router.post("/refresh-token", response_model=Token, dependencies=[Depends(rate_limit(10, 60, name="auth_refresh"))])
 async def refresh_token(
     response: Response,
     refresh_in: Optional[RefreshToken] = None, # Using Body fallback if needed
@@ -132,27 +131,25 @@ async def refresh_token(
     )
     new_refresh_token = security.create_refresh_token(str(user.id))
     
-    cookie_settings = {
-        "httponly": True,
-        "max_age": settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        "samesite": "none" if settings.ENVIRONMENT == "production" else "lax",
-        "secure": True if settings.ENVIRONMENT == "production" else False,
-    }
-    
+    samesite_val: Literal["lax", "none", "strict"] = "none" if settings.ENVIRONMENT == "production" else "lax"
+    secure_val: bool = settings.ENVIRONMENT == "production"
+
     response.set_cookie(
         key="access_token",
         value=new_access_token,
-        **cookie_settings
+        httponly=True,
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        samesite=samesite_val,
+        secure=secure_val,
     )
-    
-    # Refresh token specific settings
-    refresh_cookie_settings = cookie_settings.copy()
-    refresh_cookie_settings["max_age"] = 172800 # 2 days
     
     response.set_cookie(
         key="refresh_token",
         value=new_refresh_token,
-        **refresh_cookie_settings
+        httponly=True,
+        max_age=172800,  # 2 days
+        samesite=samesite_val,
+        secure=secure_val,
     )
 
     return {
@@ -162,7 +159,7 @@ async def refresh_token(
     }
 
 
-@router.post("/register", response_model=UserResponse)
+@router.post("/register", response_model=UserResponse, dependencies=[Depends(rate_limit(5, 60, name="auth_register"))])
 async def register_user(
     user_in: UserCreate,
 ) -> Any:
@@ -256,7 +253,7 @@ async def update_users_me(
     return current_user
 
 
-@router.post("/forgot-password")
+@router.post("/forgot-password", dependencies=[Depends(rate_limit(3, 60, name="auth_forgot_password"))])
 async def forgot_password(
     request: ForgotPasswordRequest,
 ) -> Any:
@@ -292,7 +289,7 @@ async def forgot_password(
     return {"message": generic_message}
 
 
-@router.post("/reset-password")
+@router.post("/reset-password", dependencies=[Depends(rate_limit(5, 60, name="auth_reset_password"))])
 async def reset_password(
     request: ResetPasswordRequest,
 ) -> Any:

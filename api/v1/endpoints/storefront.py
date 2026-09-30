@@ -2,8 +2,9 @@
 import uuid
 from typing import List, Any, Optional
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from beanie import PydanticObjectId
+from core.rate_limiter import rate_limit
 
 from models.platform_settings import PlatformSettings
 from models.storefront_config import StorefrontConfig
@@ -212,7 +213,7 @@ async def get_storefront_products(
         # Flagged in POS → always show promo pricing on the storefront
         apply_promo = is_on_promotion
         has_promo_price = any(
-            getattr(v, "promotion_price", None) is not None for v in (p.variants or [])
+            v.promotion_price is not None for v in (p.variants or [])
         )
 
         original_price = min((v.unit_price for v in p.variants), default=0) if p.variants else 0
@@ -228,7 +229,7 @@ async def get_storefront_products(
                 "stock": v.stock,
                 "image_url": v.image_url,
             }
-            if apply_promo and getattr(v, "promotion_price", None) is not None:
+            if apply_promo and v.promotion_price is not None:
                 vdump["original_price"] = v.unit_price
                 vdump["unit_price"] = v.promotion_price
                 vdump["promotion_price"] = v.promotion_price
@@ -239,7 +240,7 @@ async def get_storefront_products(
             promo_mins = [
                 float(v.promotion_price)
                 for v in p.variants
-                if getattr(v, "promotion_price", None) is not None
+                if v.promotion_price is not None
             ]
             if promo_mins:
                 lowest_price = min(promo_mins)
@@ -435,7 +436,7 @@ async def get_product_reviews(
     ]
 
 
-@router.post("/{slug}/reviews/{product_id}")
+@router.post("/{slug}/reviews/{product_id}", dependencies=[Depends(rate_limit(3, 60, name="storefront_review"))])
 async def submit_review(slug: str, product_id: str, review_in: ReviewCreate) -> Any:
     """Submit a product review (public, auto-moderated)."""
     config = await _get_config_by_slug(slug)
@@ -470,7 +471,7 @@ async def submit_review(slug: str, product_id: str, review_in: ReviewCreate) -> 
 
 from services.stripe import StripeService
 
-@router.post("/{slug}/checkout")
+@router.post("/{slug}/checkout", dependencies=[Depends(rate_limit(5, 60, name="storefront_checkout"))])
 async def submit_order(slug: str, order_in: StorefrontOrderCreate) -> Any:
     """Submit a storefront order and handle payment (USSD or Stripe) (public)."""
     config = await _get_config_by_slug(slug)
@@ -632,9 +633,9 @@ async def test_store_push(slug: str) -> Any:
     config = await _get_config_by_slug(slug)
     from services.web_push import send_store_push
 
-    latest_product = await Product.find_one(
+    latest_product = await Product.find(
         {"organization_id": config.organization_id, "status": {"$ne": "discontinued"}}
-    ).sort("-created_at")
+    ).sort("-created_at").first_or_none()
 
     target_url = (
         f"/store/{slug}/products/{latest_product.id}"
